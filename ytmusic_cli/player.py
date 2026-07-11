@@ -29,7 +29,7 @@ class MusicPlayer:
                     on_track_end()
 
         if on_error:
-            self.player.register_event_handler("file-error", lambda e: on_error(e))
+            self.player.register_event_callback(lambda e: on_error(e) if e.event_id == b"file-error" else None)
 
     def play(self, url_or_video_id):
         if not url_or_video_id.startswith("http"):

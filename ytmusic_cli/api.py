@@ -10,16 +10,25 @@ class YTMusicAPI:
     def __init__(self):
         self.yt = None
         self.authenticated = False
-        if OAUTH_FILE.exists():
-            self._load_auth()
+        import locale
+        saved_locale = locale.setlocale(locale.LC_NUMERIC, None)
+        try:
+            if OAUTH_FILE.exists():
+                self._load_auth()
+        finally:
+            locale.setlocale(locale.LC_NUMERIC, saved_locale)
 
     def _load_auth(self):
+        import locale
+        saved_locale = locale.setlocale(locale.LC_NUMERIC, None)
         try:
             self.yt = YTMusic(str(OAUTH_FILE))
             self.authenticated = True
         except Exception:
             self.yt = YTMusic()
             self.authenticated = False
+        finally:
+            locale.setlocale(locale.LC_NUMERIC, saved_locale)
 
     def search(self, query, filter=None, limit=20):
         kwargs = {"query": query, "limit": limit}
@@ -96,60 +105,100 @@ class YTMusicAPI:
         return None
 
 
-class OAuthFlow:
-    DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
+class BrowserOAuthFlow:
+    AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
     TOKEN_URL = "https://oauth2.googleapis.com/token"
     SCOPE = "https://www.googleapis.com/auth/youtube"
 
     def __init__(self, client_id, client_secret):
         self.client_id = client_id
         self.client_secret = client_secret
-        import httpx
-        self.http = httpx.Client()
-        self._device_code = None
-        self._user_code = None
-        self._verification_url = None
-        self._interval = 5
+        self._port = None
+        self._auth_code = []
+        self._server = None
+        self._server_thread = None
 
     def start(self):
-        resp = self.http.post(
-            self.DEVICE_CODE_URL,
-            data={
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "scope": self.SCOPE,
-            },
-        )
-        data = resp.json()
-        if "error" in data:
-            raise Exception(data.get("error_description", data["error"]))
-        self._device_code = data["device_code"]
-        self._user_code = data["user_code"]
-        self._verification_url = data["verification_url"]
-        self._interval = data.get("interval", 5)
-        return self._verification_url, self._user_code
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        from urllib.parse import urlencode
+        import socket
 
-    def poll(self):
-        resp = self.http.post(
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("localhost", 0))
+        self._port = sock.getsockname()[1]
+        sock.close()
+
+        redirect_uri = f"http://localhost:{self._port}/"
+        params = urlencode({
+            "client_id": self.client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": self.SCOPE,
+            "access_type": "offline",
+            "prompt": "consent",
+        })
+        auth_url = f"{self.AUTH_URL}?{params}"
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                from urllib.parse import urlparse, parse_qs
+                p = parse_qs(urlparse(self.path).query)
+                code_list = p.get("code", [])
+                if code_list:
+                    self.server.auth_code.append(code_list[0])
+                    self.send_response(200)
+                    self.send_header("Content-type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(b"<html><body><h1>Authorized!</h1><p>Close this window.</p></body></html>")
+                else:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b"<html><body><h1>Error</h1></body></html>")
+
+            def log_message(self, fmt, *args):
+                pass
+
+        self._server = HTTPServer(("localhost", self._port), Handler)
+        self._server.auth_code = self._auth_code
+
+        import threading
+        self._server_thread = threading.Thread(target=self._server.serve_forever)
+        self._server_thread.daemon = True
+        self._server_thread.start()
+
+        import webbrowser
+        try:
+            webbrowser.open(auth_url)
+        except Exception:
+            pass
+
+        return auth_url
+
+    def wait_for_code(self, timeout=300):
+        import time
+        for _ in range(timeout * 2):
+            if self._auth_code:
+                return self._auth_code[0]
+            time.sleep(0.5)
+        raise TimeoutError("Authorization timed out")
+
+    def exchange(self, code):
+        import httpx
+        resp = httpx.post(
             self.TOKEN_URL,
             data={
+                "code": code,
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "code": self._device_code,
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "redirect_uri": f"http://localhost:{self._port}/",
+                "grant_type": "authorization_code",
             },
         )
         data = resp.json()
         if "access_token" in data:
             self._save_tokens(data)
-            return True, None
-        elif data.get("error") == "authorization_pending":
-            return False, None
-        elif data.get("error") == "slow_down":
-            self._interval += 5
-            return False, None
-        else:
-            return False, data.get("error", "unknown error")
+            return True
+        raise Exception(data.get("error_description", data.get("error", "unknown error")))
 
     def _save_tokens(self, data):
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -158,9 +207,6 @@ class OAuthFlow:
         with open(OAUTH_FILE, "w") as f:
             json.dump(data, f, indent=2)
 
-    @property
-    def interval(self):
-        return self._interval
-
     def close(self):
-        self.http.close()
+        if self._server:
+            self._server.shutdown()

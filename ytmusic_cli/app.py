@@ -40,37 +40,16 @@ class YTMusicApp(App):
         self.api = YTMusicAPI()
         self.player = None
 
-    def check_environment(self):
-        try:
-            import mpv
-            p = mpv.MPV()
-            p.terminate()
-            del p
-        except Exception:
-            return False
-        return True
-
     def on_mount(self):
-        if not self.check_environment():
-            self.notify(
-                "libmpv not found.\n"
-                "Install: sudo apt install libmpv1  or  brew install mpv",
-                title="Missing Dependency",
-                severity="error",
-                timeout=15,
-            )
-            self.exit()
-            return
+        self._init_player()
 
         if self.api.authenticated:
-            self._init_player()
             self.push_screen(MainScreen())
         else:
             self.push_screen(AuthScreen(self.api), callback=self._on_auth_done)
 
     def _on_auth_done(self, success):
         if success:
-            self._init_player()
             self.push_screen(MainScreen())
         else:
             self.exit()
