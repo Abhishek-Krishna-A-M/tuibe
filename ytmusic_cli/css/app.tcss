@@ -1,0 +1,116 @@
+Screen {
+    layout: vertical;
+}
+
+#main-layout {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#sidebar {
+    width: 30;
+    min-width: 20;
+    border: solid $primary;
+    height: 1fr;
+}
+
+#sidebar-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $primary;
+    color: $text;
+}
+
+#library-tree {
+    height: 1fr;
+}
+
+#content {
+    height: 1fr;
+    border: solid $surface;
+}
+
+#content-header {
+    text-style: bold;
+    padding: 0 1;
+    background: $surface;
+    color: $text;
+}
+
+#content-body {
+    padding: 1;
+    height: 1fr;
+}
+
+#track-table {
+    height: 1fr;
+}
+
+#now-playing {
+    height: 3;
+    border-top: solid $primary;
+    background: $surface;
+}
+
+#now-playing-bar {
+    layout: horizontal;
+    height: 3;
+}
+
+#now-playing-info {
+    width: 1fr;
+    padding: 0 1;
+    content-align: left middle;
+}
+
+#now-playing-progress {
+    width: 30;
+}
+
+#now-playing-time {
+    width: 16;
+    content-align: center middle;
+}
+
+#now-playing-volume {
+    width: 12;
+    content-align: right middle;
+    padding: 0 1;
+}
+
+SearchScreen {
+    align: center top;
+}
+
+SearchScreen Input {
+    margin: 1 2;
+    width: 1fr;
+}
+
+#search-tabs {
+    height: 1fr;
+    margin: 0 1;
+}
+
+TabPane Static {
+    padding: 1;
+}
+
+#playlist-header {
+    text-style: bold;
+    padding: 1;
+    background: $surface;
+}
+
+#playlist-actions {
+    height: 3;
+    padding: 0 1;
+}
+
+#playlist-actions Button {
+    margin: 0 1;
+}
+
+#playlist-tracks {
+    height: 1fr;
+}
