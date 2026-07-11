@@ -36,9 +36,9 @@ class SearchScreen(Screen):
     def _do_search(self, query):
         try:
             results = self.app.api.search(query, limit=20)
-            self.call_from_thread(self._display_results, results)
+            self.app.call_from_thread(self._display_results, results)
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     def _display_results(self, results):
         for tab in ["all", "songs", "albums", "playlists", "artists"]:

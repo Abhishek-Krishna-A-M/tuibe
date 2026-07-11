@@ -35,9 +35,9 @@ class PlaylistScreen(Screen):
             data = self.app.api.get_playlist(self._playlist_id)
             tracks = data.get("tracks", [])
             self._tracks = tracks
-            self.call_from_thread(self._display, tracks, data.get("title", self._title))
+            self.app.call_from_thread(self._display, tracks, data.get("title", self._title))
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     def _display(self, tracks, title):
         self.query_one("#playlist-header", Static).update(title)

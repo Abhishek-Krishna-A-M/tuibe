@@ -63,33 +63,33 @@ class MainScreen(Screen):
     def _load_liked(self):
         try:
             tracks = self.app.api.get_liked_songs(limit=50)
-            self.call_from_thread(self._display_tracks, tracks)
+            self.app.call_from_thread(self._display_tracks, tracks)
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     @work(thread=True)
     def _load_playlists(self):
         try:
             playlists = self.app.api.get_library_playlists(limit=50)
-            self.call_from_thread(self._display_playlists, playlists)
+            self.app.call_from_thread(self._display_playlists, playlists)
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     @work(thread=True)
     def _load_albums(self):
         try:
             albums = self.app.api.get_library_albums(limit=50)
-            self.call_from_thread(self._display_albums, albums)
+            self.app.call_from_thread(self._display_albums, albums)
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     @work(thread=True)
     def _load_history(self):
         try:
             history = self.app.api.get_history()
-            self.call_from_thread(self._display_tracks, history)
+            self.app.call_from_thread(self._display_tracks, history)
         except Exception as e:
-            self.call_from_thread(self._show_error, str(e))
+            self.app.call_from_thread(self._show_error, str(e))
 
     def _clear_body(self):
         body = self.query_one("#content-body", Vertical)
