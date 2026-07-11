@@ -95,6 +95,9 @@ impl App {
                         if let Some(pl) = self.playlists.playlists.iter().find(|p| p.id == *pl_id) {
                             if let Some(track) = pl.tracks.get(self.selected_index) {
                                 self.playlist_detail_id = Some(pl.id.clone());
+                                self.queue = pl.tracks[self.selected_index..].to_vec();
+                                self.queue_index = 0;
+                                self.queue_selected = 0;
                                 self.play_track(track.clone());
                             }
                         }
