@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
@@ -5,11 +6,27 @@ use anyhow::{Context, Result};
 
 const PYTHON_SCRIPT: &str = include_str!("../../scripts/ytmusic_helper.py");
 
-fn find_python() -> &'static str {
-    static PYTHON: OnceLock<&str> = OnceLock::new();
-    PYTHON.get_or_init(|| {
-        let candidates = &[".venv/bin/python3", "venv/bin/python3", "python3"];
-        for c in candidates {
+fn find_python() -> String {
+    static PYTHON: OnceLock<String> = OnceLock::new();
+    PYTHON
+        .get_or_init(|| {
+        let binary_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+
+        let mut candidates: Vec<PathBuf> = Vec::new();
+
+        candidates.push("python3".into());
+
+        if let Some(ref dir) = binary_dir {
+            candidates.push(dir.join(".venv/bin/python3"));
+            candidates.push(dir.join("venv/bin/python3"));
+        }
+
+        candidates.push(PathBuf::from(".venv/bin/python3"));
+        candidates.push(PathBuf::from("venv/bin/python3"));
+
+        for c in &candidates {
             if Command::new(c)
                 .arg("-c")
                 .arg("import ytmusicapi")
@@ -18,11 +35,12 @@ fn find_python() -> &'static str {
                 .status()
                 .is_ok_and(|s| s.success())
             {
-                return *c;
+                return c.to_string_lossy().to_string();
             }
         }
-        "python3"
-    })
+
+        "python3".to_string()
+    }).clone()
 }
 
 pub fn run_python(args: &[&str]) -> Result<String> {
@@ -44,7 +62,12 @@ pub fn run_python(args: &[&str]) -> Result<String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusic helper error: {}", stderr.trim());
+        let msg = if stderr.contains("No module named 'ytmusicapi'") {
+            "ytmusicapi not found — run: pip install ytmusicapi".to_string()
+        } else {
+            stderr.trim().to_string()
+        };
+        anyhow::bail!("ytmusic helper error: {}", msg);
     }
 
     String::from_utf8(output.stdout).context("invalid utf-8 from python helper")
