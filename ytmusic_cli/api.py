@@ -201,7 +201,9 @@ class BrowserOAuthFlow:
         raise Exception(data.get("error_description", data.get("error", "unknown error")))
 
     def _save_tokens(self, data):
+        import time
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        data["expires_at"] = time.time() + data.get("expires_in", 3600)
         data["_client_id"] = self.client_id
         data["_client_secret"] = self.client_secret
         with open(OAUTH_FILE, "w") as f:

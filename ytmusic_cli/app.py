@@ -20,9 +20,15 @@ class YTMusicApp(App):
         Binding("space", "toggle_playback", "Play/Pause"),
         Binding("n", "next_track", "Next"),
         Binding("p", "prev_track", "Prev"),
+        Binding("right", "seek_forward", "Seek+10"),
+        Binding("left", "seek_backward", "Seek-10"),
         Binding("+", "volume_up", "Vol+"),
         Binding("-", "volume_down", "Vol-"),
-        Binding("s", "push_screen('search')", "Search"),
+        Binding("/", "push_screen('search')", "Search"),
+        Binding("r", "cycle_repeat", "Repeat"),
+        Binding("z", "toggle_shuffle", "Shuffle"),
+        Binding("s", "stop_playback", "Stop"),
+        Binding("escape", "pop_screen", "Back"),
     ]
 
     current_track = reactive(None)
@@ -150,6 +156,30 @@ class YTMusicApp(App):
         if self.player:
             self.player.volume = self.volume
 
+    def seek_forward(self):
+        if self.player and self.playback_state != "stopped":
+            self.player.seek_relative(10)
+
+    def seek_backward(self):
+        if self.player and self.playback_state != "stopped":
+            self.player.seek_relative(-10)
+
+    def stop_playback(self):
+        if self.player:
+            self.player.stop()
+        self.playback_state = "stopped"
+        self.current_track = None
+
+    def cycle_repeat(self):
+        modes = ["off", "all", "one"]
+        idx = modes.index(self.repeat_mode)
+        self.repeat_mode = modes[(idx + 1) % len(modes)]
+        self.notify(f"Repeat: {self.repeat_mode}")
+
+    def toggle_shuffle(self):
+        self.shuffle = not self.shuffle
+        self.notify(f"Shuffle: {'on' if self.shuffle else 'off'}")
+
     def action_toggle_playback(self):
         self.toggle_playback()
 
@@ -164,3 +194,21 @@ class YTMusicApp(App):
 
     def action_volume_down(self):
         self.volume_down()
+
+    def action_seek_forward(self):
+        self.seek_forward()
+
+    def action_seek_backward(self):
+        self.seek_backward()
+
+    def action_cycle_repeat(self):
+        self.cycle_repeat()
+
+    def action_toggle_shuffle(self):
+        self.toggle_shuffle()
+
+    def action_stop_playback(self):
+        self.stop_playback()
+
+    def action_pop_screen(self):
+        self.pop_screen()

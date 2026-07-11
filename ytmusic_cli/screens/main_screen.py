@@ -11,8 +11,10 @@ class MainScreen(Screen):
     BINDINGS = [
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
+        ("h", "focus_sidebar", "Library"),
+        ("l", "focus_content", "Content"),
         ("enter", "select_item", "Select"),
-        ("l", "focus_sidebar", "Library"),
+        ("tab", "focus_next", "Next Pane"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -33,6 +35,7 @@ class MainScreen(Screen):
         tree.root.add("History", data={"type": "history"})
         tree.root.expand()
         self.set_interval(0.5, self._sync_now_playing)
+        self.focus_sidebar()
 
     def _sync_now_playing(self):
         np = self.query_one(NowPlaying)
@@ -128,6 +131,12 @@ class MainScreen(Screen):
     def focus_sidebar(self):
         self.query_one("#library-tree", Tree).focus()
 
+    def focus_content(self):
+        focused = self.focused
+        if focused == self.query_one("#library-tree", Tree):
+            table = self.query_one("#track-table", TrackTable)
+            table.focus()
+
     def cursor_down(self):
         focused = self.focused
         if focused and hasattr(focused, "action_cursor_down"):
@@ -142,3 +151,9 @@ class MainScreen(Screen):
         focused = self.focused
         if focused and hasattr(focused, "action_select"):
             focused.action_select()
+
+    def action_focus_sidebar(self):
+        self.focus_sidebar()
+
+    def action_focus_content(self):
+        self.focus_content()
