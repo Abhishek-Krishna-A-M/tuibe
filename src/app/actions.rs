@@ -32,6 +32,7 @@ impl App {
             Action::Search => {
                 if self.screen == Screen::Search {
                     self.input_mode = Some(InputMode::Search);
+                    self.cursor = self.input_text.len();
                 }
             }
             Action::SearchSubmit => {
@@ -220,10 +221,20 @@ impl App {
             },
 
             Action::TypeChar(c) => {
-                self.input_text.push(c);
+                self.input_text.insert(self.cursor, c);
+                self.cursor += 1;
             }
             Action::Backspace => {
-                self.input_text.pop();
+                if self.cursor > 0 {
+                    self.cursor -= 1;
+                    self.input_text.remove(self.cursor);
+                }
+            }
+            Action::CursorLeft => {
+                self.cursor = self.cursor.saturating_sub(1);
+            }
+            Action::CursorRight => {
+                self.cursor = self.cursor.min(self.input_text.len());
             }
             Action::ConfirmInput => match self.input_mode {
                 Some(InputMode::AddToPlaylist) => {
@@ -247,6 +258,7 @@ impl App {
                     let query = self.input_text.trim().to_string();
                     if !query.is_empty() {
                         self.input_mode = None;
+                        self.cursor = 0;
                         self.selected_index = 0;
                         self.search_state = SearchState::Searching;
                         let (tx, rx) = std::sync::mpsc::channel();
@@ -259,6 +271,7 @@ impl App {
             Action::Cancel => {
                 self.input_mode = None;
                 self.input_text.clear();
+                self.cursor = 0;
                 self.pending_add_track = None;
             }
 

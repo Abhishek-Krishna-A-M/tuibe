@@ -5,7 +5,13 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::app::{App, InputMode, SearchState};
 
-pub fn render_input_prompt(frame: &mut ratatui::Frame, mode: &InputMode, text: &str, area: Rect) {
+pub fn render_input_prompt(
+    frame: &mut ratatui::Frame,
+    mode: &InputMode,
+    text: &str,
+    cursor: usize,
+    area: Rect,
+) {
     let title = match mode {
         InputMode::Search => " Search ",
         InputMode::NewPlaylist => " New Playlist Name ",
@@ -29,17 +35,20 @@ pub fn render_input_prompt(frame: &mut ratatui::Frame, mode: &InputMode, text: &
         height: area.height.saturating_sub(2),
     };
 
-    let cursor = Span::styled("▎", Style::default().fg(Color::Rgb(124, 58, 237)));
+    let cursor_span = Span::styled("▎", Style::default().fg(Color::Rgb(124, 58, 237)));
 
     let display = if text.is_empty() {
         Line::from(vec![
             Span::styled(placeholder, Style::default().fg(Color::DarkGray)),
-            cursor,
+            cursor_span,
         ])
     } else {
+        let before = &text[..cursor.min(text.len())];
+        let after = &text[cursor.min(text.len())..];
         Line::from(vec![
-            Span::styled(text, Style::default().fg(Color::White)),
-            cursor,
+            Span::styled(before.to_string(), Style::default().fg(Color::White)),
+            cursor_span,
+            Span::styled(after.to_string(), Style::default().fg(Color::White)),
         ])
     };
 

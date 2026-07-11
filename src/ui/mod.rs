@@ -17,7 +17,7 @@ pub fn render(frame: &mut ratatui::Frame, app: &App) {
             render_playlist_picker(frame, app, layout.content);
         }
         Some(ref mode) => {
-            components::search::render_input_prompt(frame, mode, &app.input_text, layout.content);
+            components::search::render_input_prompt(frame, mode, &app.input_text, app.cursor, layout.content);
         }
         None => match app.screen {
         Screen::PlaylistBrowser => {

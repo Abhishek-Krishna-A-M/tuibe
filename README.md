@@ -2,7 +2,7 @@
 
 High-performance TUI YouTube Music client. Search, play, favorite — no account needed.
 
-Built with Rust, [ratatui](https://ratatui.rs), [libmpv](https://mpv.io), [ytmusicapi](https://github.com/sigma67/ytmusicapi), and [cava](https://github.com/karlstav/cava).
+Built with Rust, [ratatui](https://ratatui.rs), [rodio](https://github.com/RustAudio/rodio), [ytmusicapi](https://github.com/sigma67/ytmusicapi), and [cava](https://github.com/karlstav/cava).
 
 ## Features
 
@@ -24,10 +24,10 @@ Built with Rust, [ratatui](https://ratatui.rs), [libmpv](https://mpv.io), [ytmus
 
 - [Rust](https://www.rust-lang.org/tools/install) ≥ 1.85
 - [Python](https://www.python.org/) ≥ 3.10 and [ytmusicapi](https://github.com/sigma67/ytmusicapi)
-- [mpv](https://mpv.io/) and `libmpv1` (for audio playback)
 - [cava](https://github.com/karlstav/cava) (for the visualizer)
 - [Nerd Font](https://www.nerdfonts.com/) (for icon glyphs)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (used by mpv for stream URL resolution)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (stream URL resolution)
+- ALSA development libraries (Linux):
 
 ```bash
 # Python dependency
