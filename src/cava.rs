@@ -55,6 +55,14 @@ impl CavaProcess {
             let _ = h.join();
         }
     }
+
+    pub fn stop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
 }
 
 fn write_config(bars: u32, sensitivity: u32) -> PathBuf {

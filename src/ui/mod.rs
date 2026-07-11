@@ -10,7 +10,7 @@ pub mod components;
 pub mod search;
 
 pub fn render(frame: &mut ratatui::Frame, app: &App) {
-    let layout = chunks::compute_layout(frame.area());
+    let layout = chunks::compute_layout(frame.area(), app.vis_mode);
 
     match app.input_mode {
         Some(InputMode::AddToPlaylist) => {

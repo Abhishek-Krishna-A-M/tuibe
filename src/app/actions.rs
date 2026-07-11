@@ -352,8 +352,14 @@ impl App {
             }
             Action::ToggleVisualizer => {
                 let was_none = self.vis_mode == VisualizerMode::None;
+                let now_none = !was_none;
                 self.vis_mode = self.vis_mode.next();
-                if was_none {
+                if now_none {
+                    if let Some(proc) = &mut self.cava_process {
+                        proc.stop();
+                    }
+                    self.vis_bars = vec![0.0; self.vis_bars.len().max(1)];
+                } else {
                     self.restart_cava();
                 }
             }

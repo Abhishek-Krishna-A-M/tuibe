@@ -1,5 +1,7 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
+use crate::app::VisualizerMode;
+
 pub struct LayoutAreas {
     pub content: Rect,
     pub results: Rect,
@@ -9,13 +11,18 @@ pub struct LayoutAreas {
     pub status: Rect,
 }
 
-pub fn compute_layout(area: Rect) -> LayoutAreas {
+pub fn compute_layout(area: Rect, vis_mode: VisualizerMode) -> LayoutAreas {
+    let vis_height: u16 = match vis_mode {
+        VisualizerMode::Spectrum => 8,
+        VisualizerMode::None => 0,
+    };
+
     let main = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(5),
             Constraint::Length(4),
-            Constraint::Length(8),
+            Constraint::Length(vis_height),
             Constraint::Length(1),
         ])
         .split(area);
