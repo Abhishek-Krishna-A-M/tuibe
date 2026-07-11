@@ -6,103 +6,95 @@ CONFIG_DIR = Path.home() / ".config" / "ytmusic-cli"
 OAUTH_FILE = CONFIG_DIR / "oauth.json"
 
 
+def _with_locale(fn):
+    import locale
+    saved = locale.setlocale(locale.LC_NUMERIC, None)
+    try:
+        return fn()
+    finally:
+        locale.setlocale(locale.LC_NUMERIC, saved)
+
+
 class YTMusicAPI:
     def __init__(self):
         self.yt = None
         self.authenticated = False
-        import locale
-        saved_locale = locale.setlocale(locale.LC_NUMERIC, None)
-        try:
-            if OAUTH_FILE.exists():
-                self._load_auth()
-        finally:
-            locale.setlocale(locale.LC_NUMERIC, saved_locale)
+        if OAUTH_FILE.exists():
+            self._load_auth()
 
     def _load_auth(self):
-        import locale
-        saved_locale = locale.setlocale(locale.LC_NUMERIC, None)
-        try:
+        def _load():
             self.yt = YTMusic(str(OAUTH_FILE))
             self.authenticated = True
+        try:
+            _with_locale(_load)
+            return
         except Exception:
+            pass
+        def _fallback():
             self.yt = YTMusic()
             self.authenticated = False
-        finally:
-            locale.setlocale(locale.LC_NUMERIC, saved_locale)
+        _with_locale(_fallback)
 
     def search(self, query, filter=None, limit=20):
-        kwargs = {"query": query, "limit": limit}
-        if filter:
-            kwargs["filter"] = filter
-        return self.yt.search(**kwargs)
+        return _with_locale(lambda: self.yt.search(query=query, limit=limit, filter=filter))
 
     def get_search_suggestions(self, query):
-        return self.yt.get_search_suggestions(query)
+        return _with_locale(lambda: self.yt.get_search_suggestions(query))
 
     def get_library_playlists(self, limit=50):
-        return self.yt.get_library_playlists(limit=limit)
+        return _with_locale(lambda: self.yt.get_library_playlists(limit=limit))
 
     def get_library_songs(self, limit=50, order=None):
-        kwargs = {"limit": limit}
-        if order:
-            kwargs["order"] = order
-        return self.yt.get_library_songs(**kwargs)
+        return _with_locale(lambda: self.yt.get_library_songs(limit=limit, order=order))
 
     def get_library_albums(self, limit=50):
-        return self.yt.get_library_albums(limit=limit)
+        return _with_locale(lambda: self.yt.get_library_albums(limit=limit))
 
     def get_liked_songs(self, limit=100):
-        result = self.yt.get_liked_songs(limit=limit)
+        result = _with_locale(lambda: self.yt.get_liked_songs(limit=limit))
         return result.get("tracks", [])
 
     def get_playlist(self, playlist_id, limit=None):
-        kwargs = {"playlistId": playlist_id}
-        if limit is not None:
-            kwargs["limit"] = limit
-        return self.yt.get_playlist(**kwargs)
+        return _with_locale(lambda: self.yt.get_playlist(playlistId=playlist_id, limit=limit))
 
     def get_album(self, browse_id):
-        return self.yt.get_album(browse_id)
+        return _with_locale(lambda: self.yt.get_album(browse_id))
 
     def get_song(self, video_id):
-        return self.yt.get_song(video_id)
+        return _with_locale(lambda: self.yt.get_song(video_id))
 
     def get_watch_playlist(self, video_id=None, playlist_id=None, radio=False):
-        kwargs = {}
-        if video_id:
-            kwargs["videoId"] = video_id
-        if playlist_id:
-            kwargs["playlistId"] = playlist_id
-        if radio:
-            kwargs["radio"] = True
-        return self.yt.get_watch_playlist(**kwargs)
+        return _with_locale(lambda: self.yt.get_watch_playlist(videoId=video_id, playlistId=playlist_id, radio=radio))
 
     def rate_song(self, video_id, rating):
-        return self.yt.rate_song(video_id, rating)
+        return _with_locale(lambda: self.yt.rate_song(video_id, rating))
 
     def rate_playlist(self, playlist_id, rating):
-        return self.yt.rate_playlist(playlist_id, rating)
+        return _with_locale(lambda: self.yt.rate_playlist(playlist_id, rating))
 
     def get_history(self):
-        return self.yt.get_history()
+        return _with_locale(lambda: self.yt.get_history())
 
     def get_home(self, limit=10):
-        return self.yt.get_home(limit=limit)
+        return _with_locale(lambda: self.yt.get_home(limit=limit))
 
     def get_stream_url(self, video_id):
-        sig_ts = self.yt.get_signatureTimestamp()
-        try:
-            song = self.yt.get_song(video_id, signatureTimestamp=sig_ts)
-            formats = song.get("streamingData", {}).get("adaptiveFormats", [])
-            audio = [f for f in formats if f.get("mimeType", "").startswith("audio/")]
-            if audio:
-                audio.sort(key=lambda f: int(f.get("bitrate", 0)), reverse=True)
-                url = audio[0].get("url")
-                if url:
-                    return url
-        except Exception:
-            pass
-        return None
+        def _get():
+            sig_ts = self.yt.get_signatureTimestamp()
+            try:
+                song = self.yt.get_song(video_id, signatureTimestamp=sig_ts)
+                formats = song.get("streamingData", {}).get("adaptiveFormats", [])
+                audio = [f for f in formats if f.get("mimeType", "").startswith("audio/")]
+                if audio:
+                    audio.sort(key=lambda f: int(f.get("bitrate", 0)), reverse=True)
+                    url = audio[0].get("url")
+                    if url:
+                        return url
+            except Exception:
+                pass
+            return None
+        return _with_locale(_get)
 
 
 class BrowserOAuthFlow:

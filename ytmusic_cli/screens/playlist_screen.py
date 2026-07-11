@@ -57,10 +57,9 @@ class PlaylistScreen(Screen):
             random.shuffle(shuffled)
             self.app.play_playlist(shuffled)
 
-    def play_selected(self):
+    def on_data_table_row_selected(self, event):
         table = self.query_one("#playlist-tracks", TrackTable)
-        row_key = table.cursor_row
-        if row_key is not None and self._tracks:
-            idx = int(row_key) - 1
-            if 0 <= idx < len(self._tracks):
-                self.app.play_track(self._tracks[idx])
+        if event.row_key and table._tracks:
+            idx = int(str(event.row_key)) - 1
+            if 0 <= idx < len(table._tracks):
+                self.app.play_track(table._tracks[idx])

@@ -1,10 +1,11 @@
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Static, Tree
+from textual.widgets import Static, Tree, ListView, ListItem
 from textual.containers import Horizontal, Vertical
 from textual import work
 from ytmusic_cli.widgets.now_playing import NowPlaying
 from ytmusic_cli.widgets.track_table import TrackTable
+from ytmusic_cli.screens.playlist_screen import PlaylistScreen
 
 
 class MainScreen(Screen):
@@ -104,37 +105,63 @@ class MainScreen(Screen):
         table = TrackTable(id="track-table")
         self.query_one("#content-body", Vertical).mount(table)
         table.set_tracks(tracks)
+        table.focus()
 
     def _display_playlists(self, playlists):
         self._clear_body()
-        lines = []
+        lv = ListView(id="content-list")
         for p in playlists:
+            title = p.get("title", "Unknown")
+            pid = p.get("browseId", p.get("playlistId", ""))
             count = p.get("count", "?")
-            lines.append(f"{p.get('title', 'Unknown')}  ({count} tracks)")
-        text = "\n".join(lines) if lines else "No playlists found"
-        self.query_one("#content-body", Vertical).mount(Static(text))
+            lv.append(ListItem(Static(f"{title} ({count} tracks)"), data={"type": "playlist", "id": pid}))
+        self.query_one("#content-body", Vertical).mount(lv)
+        lv.focus()
 
     def _display_albums(self, albums):
         self._clear_body()
-        lines = []
+        lv = ListView(id="content-list")
         for a in albums:
+            title = a.get("title", "Unknown")
+            bid = a.get("browseId", a.get("albumId", ""))
             artists = a.get("artists", [])
             artist = artists[0].get("name", "Unknown") if artists else "Unknown"
-            lines.append(f"{a.get('title', 'Unknown')} - {artist} ({a.get('year', '')})")
-        text = "\n".join(lines) if lines else "No albums found"
-        self.query_one("#content-body", Vertical).mount(Static(text))
+            year = a.get("year", "")
+            label = f"{title} - {artist}" + (f" ({year})" if year else "")
+            lv.append(ListItem(Static(label), data={"type": "album", "id": bid}))
+        self.query_one("#content-body", Vertical).mount(lv)
+        lv.focus()
 
     def _show_error(self, msg):
         self._clear_body()
         self.query_one("#content-body", Vertical).mount(Static(f"[red]Error: {msg}[/red]"))
+
+    def on_list_view_selected(self, event):
+        item = event.item
+        data = item.data
+        if data:
+            if data["type"] == "playlist" and data["id"]:
+                self.app.push_screen(PlaylistScreen(data["id"], title="Playlist"))
+            elif data["type"] == "album" and data["id"]:
+                self.app.push_screen(PlaylistScreen(data["id"], title="Album"))
+
+    def on_data_table_row_selected(self, event):
+        try:
+            table = self.query_one("#track-table", TrackTable)
+        except Exception:
+            return
+        if event.row_key and table._tracks:
+            idx = int(str(event.row_key)) - 1
+            if 0 <= idx < len(table._tracks):
+                self.app.play_track(table._tracks[idx])
 
     def focus_sidebar(self):
         self.query_one("#library-tree", Tree).focus()
 
     def focus_content(self):
         focused = self.focused
-        if focused == self.query_one("#library-tree", Tree):
-            table = self.query_one("#track-table", TrackTable)
+        table = self.query_one("#track-table", TrackTable)
+        if focused != table:
             table.focus()
 
     def cursor_down(self):

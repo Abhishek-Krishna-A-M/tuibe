@@ -7,8 +7,10 @@ class TrackTable(DataTable):
         self.add_columns("#", "Title", "Artist", "Album", "Duration")
         self.cursor_type = "row"
         self.zebra_stripes = True
+        self._tracks = []
 
     def set_tracks(self, tracks):
+        self._tracks = list(tracks)
         self.clear()
         for i, track in enumerate(tracks, 1):
             artists = track.get("artists", [])
