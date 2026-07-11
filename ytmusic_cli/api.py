@@ -97,12 +97,13 @@ class YTMusicAPI:
 
 
 class OAuthFlow:
-    DEVICE_CODE_URL = "https://www.youtube.com/o/oauth2/device/code"
+    DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
     TOKEN_URL = "https://oauth2.googleapis.com/token"
     SCOPE = "https://www.googleapis.com/auth/youtube"
 
     def __init__(self, client_id, client_secret):
         self.client_id = client_id
+        self.client_secret = client_secret
         import httpx
         self.http = httpx.Client()
         self._device_code = None
@@ -115,10 +116,13 @@ class OAuthFlow:
             self.DEVICE_CODE_URL,
             data={
                 "client_id": self.client_id,
+                "client_secret": self.client_secret,
                 "scope": self.SCOPE,
             },
         )
         data = resp.json()
+        if "error" in data:
+            raise Exception(data.get("error_description", data["error"]))
         self._device_code = data["device_code"]
         self._user_code = data["user_code"]
         self._verification_url = data["verification_url"]
@@ -130,6 +134,7 @@ class OAuthFlow:
             self.TOKEN_URL,
             data={
                 "client_id": self.client_id,
+                "client_secret": self.client_secret,
                 "code": self._device_code,
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             },
@@ -148,6 +153,8 @@ class OAuthFlow:
 
     def _save_tokens(self, data):
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        data["_client_id"] = self.client_id
+        data["_client_secret"] = self.client_secret
         with open(OAUTH_FILE, "w") as f:
             json.dump(data, f, indent=2)
 

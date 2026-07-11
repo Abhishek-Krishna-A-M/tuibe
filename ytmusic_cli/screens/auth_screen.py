@@ -115,20 +115,20 @@ class AuthScreen(ModalScreen[bool]):
         try:
             url, code = self._flow.start()
         except Exception as e:
-            self.call_from_thread(self._show_error, f"Failed to start OAuth: {e}")
+            self.app.call_from_thread(self._show_error, f"Failed to start OAuth: {e}")
             return
 
-        self.call_from_thread(self._show_oauth_instructions, url, code)
+        self.app.call_from_thread(self._show_oauth_instructions, url, code)
 
         while True:
             import time
             time.sleep(self._flow.interval)
             success, error = self._flow.poll()
             if success:
-                self.call_from_thread(self._on_auth_success)
+                self.app.call_from_thread(self._on_auth_success)
                 return
             elif error:
-                self.call_from_thread(self._show_error, f"OAuth error: {error}")
+                self.app.call_from_thread(self._show_error, f"OAuth error: {error}")
                 return
 
     def _show_oauth_instructions(self, url, code):
