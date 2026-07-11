@@ -1,0 +1,41 @@
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+
+pub struct LayoutAreas {
+    pub content: Rect,
+    pub results: Rect,
+    pub queue: Rect,
+    pub player: Rect,
+    pub visualizer: Rect,
+    pub status: Rect,
+}
+
+pub fn compute_layout(area: Rect) -> LayoutAreas {
+    let main = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(5),
+            Constraint::Length(4),
+            Constraint::Length(8),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    let content_area = main[0];
+    let player = main[1];
+    let visualizer_area = main[2];
+    let status = main[3];
+
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(content_area);
+
+    LayoutAreas {
+        content: content_area,
+        results: columns[0],
+        queue: columns[1],
+        player,
+        visualizer: visualizer_area,
+        status,
+    }
+}

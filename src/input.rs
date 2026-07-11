@@ -1,0 +1,190 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+use crate::app::{App, InputMode};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Action {
+    Search,
+    SearchSubmit,
+    PlaySelected,
+    PauseResume,
+    Stop,
+    Next,
+    Previous,
+    ToggleRepeat,
+    ToggleShuffle,
+    ToggleQueueView,
+    SeekForward,
+    SeekBackward,
+    VolumeUp,
+    VolumeDown,
+    ToggleLike,
+    EnqueueSelected,
+    ShowPlaylists,
+    NewPlaylist,
+    DeletePlaylist,
+    RemoveFromPlaylist,
+    MoveUp,
+    MoveDown,
+    TypeChar(char),
+    Backspace,
+    ConfirmInput,
+    Cancel,
+    EnterPlaylist,
+    Back,
+    Tick,
+    ToggleVisualizer,
+    ToggleAutoplay,
+    CavaSensitivityUp,
+    CavaSensitivityDown,
+    CavaBarsUp,
+    CavaBarsDown,
+    RemoveFromQueue,
+    AddToPlaylist,
+    Quit,
+}
+
+pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        match key.code {
+            KeyCode::Char('c') => return Some(Action::Quit),
+            _ => {}
+        }
+    }
+
+    // Input mode: route all chars to the active input
+    if let Some(mode) = app.input_mode() {
+        match mode {
+            InputMode::AddToPlaylist => match key.code {
+                KeyCode::Esc => return Some(Action::Cancel),
+                KeyCode::Enter => return Some(Action::ConfirmInput),
+                KeyCode::Char('j') | KeyCode::Down => return Some(Action::MoveDown),
+                KeyCode::Char('k') | KeyCode::Up => return Some(Action::MoveUp),
+                _ => return None,
+            },
+            _ => match key.code {
+                KeyCode::Esc => return Some(Action::Cancel),
+                KeyCode::Enter => return Some(Action::ConfirmInput),
+                KeyCode::Backspace => return Some(Action::Backspace),
+                KeyCode::Char(c) => return Some(Action::TypeChar(c)),
+                _ => return None,
+            },
+        }
+    }
+
+    match app.screen {
+        crate::app::Screen::PlaylistBrowser => match key.code {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('j') | KeyCode::Down => Some(Action::MoveDown),
+            KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
+            KeyCode::Enter => Some(Action::EnterPlaylist),
+            KeyCode::Char('N') => Some(Action::NewPlaylist),
+            KeyCode::Char('d') => Some(Action::DeletePlaylist),
+            KeyCode::Char('n') => Some(Action::Next),
+            KeyCode::Char(' ') => Some(Action::PauseResume),
+            KeyCode::Char('S') => Some(Action::Stop),
+            KeyCode::Char('p') => Some(Action::Previous),
+            KeyCode::Char('s') => Some(Action::ToggleShuffle),
+            KeyCode::Char('r') => Some(Action::ToggleRepeat),
+            KeyCode::Char('f') => Some(Action::ToggleLike),
+            KeyCode::Char('v') => Some(Action::ToggleVisualizer),
+            KeyCode::Char('t') => Some(Action::ToggleAutoplay),
+            KeyCode::Char('[') => Some(Action::CavaSensitivityDown),
+            KeyCode::Char(']') => Some(Action::CavaSensitivityUp),
+            KeyCode::Char('{') => Some(Action::CavaBarsDown),
+            KeyCode::Char('}') => Some(Action::CavaBarsUp),
+            KeyCode::Esc | KeyCode::Char('P') => Some(Action::Back),
+            KeyCode::Char('/') => Some(Action::Search),
+            KeyCode::Tab => Some(Action::ToggleQueueView),
+            _ => None,
+        },
+        crate::app::Screen::PlaylistDetail => match key.code {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('j') | KeyCode::Down => Some(Action::MoveDown),
+            KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
+            KeyCode::Enter => Some(Action::PlaySelected),
+            KeyCode::Char('a') => Some(Action::EnqueueSelected),
+            KeyCode::Char(' ') => Some(Action::PauseResume),
+            KeyCode::Char('d') => Some(Action::RemoveFromPlaylist),
+            KeyCode::Char('S') => Some(Action::Stop),
+            KeyCode::Char('n') => Some(Action::Next),
+            KeyCode::Char('p') => Some(Action::Previous),
+            KeyCode::Right => Some(Action::SeekForward),
+            KeyCode::Left => Some(Action::SeekBackward),
+            KeyCode::Char('f') => Some(Action::ToggleLike),
+            KeyCode::Char('s') => Some(Action::ToggleShuffle),
+            KeyCode::Char('r') => Some(Action::ToggleRepeat),
+            KeyCode::Char('t') => Some(Action::ToggleAutoplay),
+            KeyCode::Char('[') => Some(Action::CavaSensitivityDown),
+            KeyCode::Char(']') => Some(Action::CavaSensitivityUp),
+            KeyCode::Char('{') => Some(Action::CavaBarsDown),
+            KeyCode::Char('}') => Some(Action::CavaBarsUp),
+            KeyCode::Esc | KeyCode::Backspace => Some(Action::Back),
+            KeyCode::Tab => Some(Action::ToggleQueueView),
+            _ => None,
+        },
+        crate::app::Screen::Queue => match key.code {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('j') | KeyCode::Down => Some(Action::MoveDown),
+            KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
+            KeyCode::Char('d') => Some(Action::RemoveFromQueue),
+            KeyCode::Char(' ') => Some(Action::PauseResume),
+            KeyCode::Char('n') => Some(Action::Next),
+            KeyCode::Char('p') => Some(Action::Previous),
+            KeyCode::Char('S') => Some(Action::Stop),
+            KeyCode::Char('s') => Some(Action::ToggleShuffle),
+            KeyCode::Char('r') => Some(Action::ToggleRepeat),
+            KeyCode::Char('v') => Some(Action::ToggleVisualizer),
+            KeyCode::Char('t') => Some(Action::ToggleAutoplay),
+            KeyCode::Char('[') => Some(Action::CavaSensitivityDown),
+            KeyCode::Char(']') => Some(Action::CavaSensitivityUp),
+            KeyCode::Char('{') => Some(Action::CavaBarsDown),
+            KeyCode::Char('}') => Some(Action::CavaBarsUp),
+            KeyCode::Tab => Some(Action::ToggleQueueView),
+            _ => None,
+        },
+        _ => match key.code {
+            KeyCode::Char('q') => Some(Action::Quit),
+            KeyCode::Char('/') => Some(Action::Search),
+            KeyCode::Char('j') | KeyCode::Down => Some(Action::MoveDown),
+            KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
+            KeyCode::Enter => Some(Action::PlaySelected),
+            KeyCode::Char('a') => Some(Action::EnqueueSelected),
+            KeyCode::Char(' ') => Some(Action::PauseResume),
+            KeyCode::Char('S') => Some(Action::Stop),
+            KeyCode::Char('n') => Some(Action::Next),
+            KeyCode::Char('p') => Some(Action::Previous),
+            KeyCode::Right => Some(Action::SeekForward),
+            KeyCode::Left => Some(Action::SeekBackward),
+            KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::VolumeUp),
+            KeyCode::Char('-') => Some(Action::VolumeDown),
+            KeyCode::Char('f') => Some(Action::ToggleLike),
+            KeyCode::Char('s') => Some(Action::ToggleShuffle),
+            KeyCode::Char('r') => Some(Action::ToggleRepeat),
+            KeyCode::Char('P') => Some(Action::ShowPlaylists),
+            KeyCode::Char('v') => Some(Action::ToggleVisualizer),
+            KeyCode::Char('A') => Some(Action::AddToPlaylist),
+            KeyCode::Char('t') => Some(Action::ToggleAutoplay),
+            KeyCode::Char('[') => Some(Action::CavaSensitivityDown),
+            KeyCode::Char(']') => Some(Action::CavaSensitivityUp),
+            KeyCode::Char('{') => Some(Action::CavaBarsDown),
+            KeyCode::Char('}') => Some(Action::CavaBarsUp),
+            KeyCode::Esc => Some(Action::Cancel),
+            KeyCode::Tab => Some(Action::ToggleQueueView),
+            _ => None,
+        },
+    }
+}
+
+pub fn map_mouse(mouse: MouseEvent, app: &App) -> Option<Action> {
+    if app.input_mode().is_some() {
+        return None;
+    }
+
+    match mouse.kind {
+        MouseEventKind::ScrollUp => Some(Action::MoveUp),
+        MouseEventKind::ScrollDown => Some(Action::MoveDown),
+        MouseEventKind::Down(MouseButton::Left) => Some(Action::PlaySelected),
+        _ => None,
+    }
+}

@@ -1,9 +1,17 @@
-__pycache__/
-*.pyc
-*.egg-info/
-dist/
-build/
+/target/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python archive
+python/
 .venv/
-oauth.json
+
+# Agent files
+AGENTS.md
+
+# Config/auth
 auth.json
+oauth.json
 *.png
