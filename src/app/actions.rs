@@ -234,7 +234,7 @@ impl App {
                 self.cursor = self.cursor.saturating_sub(1);
             }
             Action::CursorRight => {
-                self.cursor = self.cursor.min(self.input_text.len());
+                self.cursor = (self.cursor + 1).min(self.input_text.len());
             }
             Action::ConfirmInput => match self.input_mode {
                 Some(InputMode::AddToPlaylist) => {
