@@ -358,7 +358,7 @@ impl App {
                 }
             }
             Action::CavaSensitivityUp => {
-                self.cava_sensitivity = (self.cava_sensitivity + 10).min(200);
+                self.cava_sensitivity = (self.cava_sensitivity + 10).min(500);
                 self.restart_cava();
             }
             Action::CavaSensitivityDown => {
