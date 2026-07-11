@@ -30,10 +30,6 @@ class AuthScreen(ModalScreen[bool]):
         margin-bottom: 1;
     }
 
-    .auth-input {
-        margin-bottom: 1;
-    }
-
     #auth-submit {
         width: 100%;
         margin-top: 1;
@@ -50,7 +46,7 @@ class AuthScreen(ModalScreen[bool]):
         margin-top: 1;
     }
 
-    #auth-url-box {
+    #auth-code-box {
         width: 100%;
         height: auto;
         margin-top: 1;
@@ -58,11 +54,17 @@ class AuthScreen(ModalScreen[bool]):
         border: solid $accent;
     }
 
-    #auth-url-box Label {
+    #auth-code-box Label {
         text-style: bold;
     }
 
-    #auth-url-text {
+    #auth-code-url {
+        text-style: bold;
+        color: $accent;
+        margin-top: 0;
+    }
+
+    #auth-code-text {
         text-style: bold;
         color: $accent;
         margin-top: 1;
@@ -81,86 +83,96 @@ class AuthScreen(ModalScreen[bool]):
                 "1. Go to https://console.cloud.google.com/apis/credentials\n"
                 "2. Create OAuth 2.0 Client ID (Desktop app type)\n"
                 "3. Download the JSON file\n"
-                "4. Enter the path below",
+                "4. Enter the path below\n\n"
+                "Or leave empty to use built-in credentials.",
                 id="auth-desc",
             )
             yield Input(
-                placeholder="Path to credentials JSON (e.g. ./auth.json)",
+                placeholder="Path to credentials JSON (or press Enter for default)",
                 id="creds-path",
-                classes="auth-input",
             )
             yield Button("Authorize", id="auth-submit", variant="primary")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "auth-submit":
             path = self.query_one("#creds-path", Input).value.strip()
-            if not path:
-                self._show_error("Please enter the path to your credentials file")
-                return
             self._start_oauth(path)
 
     def _show_error(self, msg):
         try:
-            existing = self.query_one("#auth-error", Label)
-            existing.update(msg)
+            self.query_one("#auth-error", Label).update(msg)
         except Exception:
-            self.mount(Label(msg, id="auth-error"), before=0)
+            self.query_one("#auth-container", Container).mount(
+                Label(msg, id="auth-error")
+            )
 
     def _show_status(self, msg):
         try:
-            existing = self.query_one("#auth-status", Label)
-            existing.update(msg)
+            self.query_one("#auth-status", Label).update(msg)
         except Exception:
-            self.mount(Label(msg, id="auth-status"))
+            self.query_one("#auth-container", Container).mount(
+                Label(msg, id="auth-status")
+            )
 
-    def _show_auth_url(self, url):
+    def _show_code(self, url, user_code):
         try:
-            self.query_one("#auth-url-text", Label).update(url)
+            self.query_one("#auth-code-url", Label).update(url)
+            self.query_one("#auth-code-text", Label).update(f"Enter code: {user_code}")
         except Exception:
-            self.mount(
+            self.query_one("#auth-container", Container).mount(
                 Container(
-                    Label("If browser didn't open, visit:"),
-                    Label(url, id="auth-url-text"),
-                    id="auth-url-box",
+                    Label("Open this URL and enter the code:", id="auth-code-label"),
+                    Label(url, id="auth-code-url"),
+                    Label(f"Code: {user_code}", id="auth-code-text"),
+                    id="auth-code-box",
                 )
             )
 
     @work(thread=True)
     def _start_oauth(self, path):
-        import json
+        from ytmusic_cli.api import DeviceCodeFlow
+
+        client_id = None
+        client_secret = None
+
+        if path:
+            import json
+
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                if "installed" in data:
+                    data = data["installed"]
+                elif "web" in data:
+                    data = data["web"]
+                client_id = data.get("client_id")
+                client_secret = data.get("client_secret")
+                if not client_id:
+                    raise Exception("No client_id found in credentials file")
+            except Exception as e:
+                self.app.call_from_thread(
+                    self._show_error, f"Failed to read credentials: {e}"
+                )
+                return
+
+        flow = DeviceCodeFlow(client_id, client_secret)
 
         try:
-            with open(path) as f:
-                data = json.load(f)
-            if "installed" in data:
-                data = data["installed"]
-            elif "web" in data:
-                data = data["web"]
-            client_id = data.get("client_id", "")
-            client_secret = data.get("client_secret", "")
-            if not client_id:
-                raise Exception("No client_id found in credentials file")
-        except Exception as e:
-            self.app.call_from_thread(self._show_error, f"Failed to read credentials: {e}")
-            return
-
-        from ytmusic_cli.api import BrowserOAuthFlow
-
-        flow = BrowserOAuthFlow(client_id, client_secret)
-
-        try:
-            self.app.call_from_thread(self._show_status, "Starting browser for authorization...")
-            auth_url = flow.start()
-            self.app.call_from_thread(self._show_auth_url, auth_url)
-            self.app.call_from_thread(self._show_status, "Waiting for authorization in browser...")
-            code = flow.wait_for_code()
-            self.app.call_from_thread(self._show_status, "Exchanging code for tokens...")
-            flow.exchange(code)
+            self.app.call_from_thread(self._show_status, "Requesting device code...")
+            code_data = flow.get_code()
+            self.app.call_from_thread(
+                self._show_code, code_data["url"], code_data["user_code"]
+            )
+            self.app.call_from_thread(
+                self._show_status,
+                f"Waiting for authorization... (polls every {code_data['interval']}s)",
+            )
+            flow.wait_for_token(
+                code_data["device_code"], interval=code_data["interval"]
+            )
         except Exception as e:
             self.app.call_from_thread(self._show_error, f"OAuth failed: {e}")
             return
-        finally:
-            flow.close()
 
         self.app.call_from_thread(self._on_auth_success)
 

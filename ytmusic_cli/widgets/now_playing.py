@@ -18,37 +18,47 @@ class NowPlaying(Static):
             yield Label("0:00 / 0:00", id="np-time")
             yield Label("Vol: 100%", id="np-vol")
 
-    def on_mount(self):
-        self._info = self.query_one("#np-info", Label)
-        self._progress = self.query_one("#np-progress", ProgressBar)
-        self._time = self.query_one("#np-time", Label)
-        self._vol = self.query_one("#np-vol", Label)
-
     def watch_position(self, pos):
         if self.duration > 0:
-            self._progress.progress = (pos / self.duration) * 100
+            try:
+                self.query_one("#np-progress", ProgressBar).progress = (
+                    pos / self.duration
+                ) * 100
+            except Exception:
+                pass
         self._update_time()
 
     def watch_duration(self, _):
         self._update_time()
 
     def watch_volume(self, vol):
-        self._vol.update(f"Vol: {vol}%")
+        try:
+            self.query_one("#np-vol", Label).update(f"Vol: {vol}%")
+        except Exception:
+            pass
 
     def watch_state(self, state):
+        try:
+            info = self.query_one("#np-info", Label)
+        except Exception:
+            return
         if self.track and state != "stopped":
             title = self.track.get("title", "Unknown")
             artists = self.track.get("artists", [])
             artist = artists[0].get("name", "Unknown") if artists else "Unknown"
-            icon = "▶" if state == "playing" else "⏸"
-            self._info.update(f"{icon} {title} - {artist}")
+            icon = "\u25b6" if state == "playing" else "\u23f8"
+            info.update(f"{icon} {title} - {artist}")
         else:
-            self._info.update("Nothing Playing")
+            info.update("Nothing Playing")
 
     def _update_time(self):
+        try:
+            time_label = self.query_one("#np-time", Label)
+        except Exception:
+            return
         cur = self._fmt_time(self.position)
         total = self._fmt_time(self.duration)
-        self._time.update(f"{cur} / {total}")
+        time_label.update(f"{cur} / {total}")
 
     @staticmethod
     def _fmt_time(seconds):

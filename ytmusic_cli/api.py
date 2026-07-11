@@ -1,40 +1,90 @@
 import json
+import locale as locale_mod
+import time
 from pathlib import Path
 from ytmusicapi import YTMusic
+from ytmusicapi.auth.oauth.credentials import OAuthCredentials
 
 CONFIG_DIR = Path.home() / ".config" / "ytmusic-cli"
 OAUTH_FILE = CONFIG_DIR / "oauth.json"
 
+DEFAULT_CLIENT_ID = "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com"
+DEFAULT_CLIENT_SECRET = "SboVhoG9s0rNafixCSGGKXAT"
+
 
 def _with_locale(fn):
-    import locale
-    saved = locale.setlocale(locale.LC_NUMERIC, None)
+    try:
+        saved = locale_mod.setlocale(locale_mod.LC_NUMERIC, None)
+    except locale_mod.Error:
+        saved = "C"
+    try:
+        locale_mod.setlocale(locale_mod.LC_NUMERIC, "C")
+    except locale_mod.Error:
+        pass
     try:
         return fn()
     finally:
-        locale.setlocale(locale.LC_NUMERIC, saved)
+        try:
+            locale_mod.setlocale(locale_mod.LC_NUMERIC, saved)
+        except locale_mod.Error:
+            pass
 
 
 class YTMusicAPI:
     def __init__(self):
         self.yt = None
         self.authenticated = False
+        self._oauth_credentials = None
         if OAUTH_FILE.exists():
             self._load_auth()
 
     def _load_auth(self):
+        self._oauth_credentials = self._load_oauth_credentials()
+
         def _load():
-            self.yt = YTMusic(str(OAUTH_FILE))
+            if self._oauth_credentials:
+                self.yt = YTMusic(
+                    str(OAUTH_FILE), oauth_credentials=self._oauth_credentials
+                )
+            else:
+                self.yt = YTMusic(str(OAUTH_FILE))
+            self._ensure_api_key()
             self.authenticated = True
+
         try:
             _with_locale(_load)
-            return
+            if self.authenticated:
+                return
         except Exception:
-            pass
+            self.authenticated = False
+            self.yt = None
+
         def _fallback():
             self.yt = YTMusic()
             self.authenticated = False
-        _with_locale(_fallback)
+
+        try:
+            _with_locale(_fallback)
+        except Exception:
+            self.authenticated = False
+
+    def _load_oauth_credentials(self):
+        if not OAUTH_FILE.exists():
+            return None
+        try:
+            with open(OAUTH_FILE) as f:
+                data = json.load(f)
+            client_id = data.get("_client_id") or data.get("client_id", DEFAULT_CLIENT_ID)
+            client_secret = data.get("_client_secret") or data.get("client_secret", DEFAULT_CLIENT_SECRET)
+            return OAuthCredentials(client_id, client_secret)
+        except Exception:
+            return None
+
+    def _ensure_api_key(self):
+        from ytmusicapi.ytmusic import YTM_PARAMS_KEY
+
+        if self.yt and YTM_PARAMS_KEY not in self.yt.params:
+            self.yt.params += YTM_PARAMS_KEY
 
     def search(self, query, filter=None, limit=20):
         return _with_locale(lambda: self.yt.search(query=query, limit=limit, filter=filter))
@@ -65,7 +115,11 @@ class YTMusicAPI:
         return _with_locale(lambda: self.yt.get_song(video_id))
 
     def get_watch_playlist(self, video_id=None, playlist_id=None, radio=False):
-        return _with_locale(lambda: self.yt.get_watch_playlist(videoId=video_id, playlistId=playlist_id, radio=radio))
+        return _with_locale(
+            lambda: self.yt.get_watch_playlist(
+                videoId=video_id, playlistId=playlist_id, radio=radio
+            )
+        )
 
     def rate_song(self, video_id, rating):
         return _with_locale(lambda: self.yt.rate_song(video_id, rating))
@@ -81,9 +135,8 @@ class YTMusicAPI:
 
     def get_stream_url(self, video_id):
         def _get():
-            sig_ts = self.yt.get_signatureTimestamp()
             try:
-                song = self.yt.get_song(video_id, signatureTimestamp=sig_ts)
+                song = self.yt.get_song(video_id)
                 formats = song.get("streamingData", {}).get("adaptiveFormats", [])
                 audio = [f for f in formats if f.get("mimeType", "").startswith("audio/")]
                 if audio:
@@ -94,113 +147,66 @@ class YTMusicAPI:
             except Exception:
                 pass
             return None
+
         return _with_locale(_get)
 
 
-class BrowserOAuthFlow:
-    AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
-    TOKEN_URL = "https://oauth2.googleapis.com/token"
-    SCOPE = "https://www.googleapis.com/auth/youtube"
+class DeviceCodeFlow:
+    """ytmusicapi device code OAuth flow — same as ``ytmusicapi.setup_oauth``."""
 
-    def __init__(self, client_id, client_secret):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self._port = None
-        self._auth_code = []
-        self._server = None
-        self._server_thread = None
+    def __init__(self, client_id=None, client_secret=None):
+        self.client_id = client_id or DEFAULT_CLIENT_ID
+        self.client_secret = client_secret or DEFAULT_CLIENT_SECRET
+        self._credentials = OAuthCredentials(self.client_id, self.client_secret)
 
-    def start(self):
-        from http.server import HTTPServer, BaseHTTPRequestHandler
-        from urllib.parse import urlencode
-        import socket
+    def get_code(self):
+        code = self._credentials.get_code()
+        url = f"{code['verification_url']}?user_code={code['user_code']}"
+        return {
+            "device_code": code["device_code"],
+            "url": url,
+            "user_code": code["user_code"],
+            "interval": code.get("interval", 5),
+        }
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(("localhost", 0))
-        self._port = sock.getsockname()[1]
-        sock.close()
+    def wait_for_token(self, device_code, interval=5, timeout=300):
+        import time as _time
 
-        redirect_uri = f"http://localhost:{self._port}/"
-        params = urlencode({
-            "client_id": self.client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": self.SCOPE,
-            "access_type": "offline",
-            "prompt": "consent",
-        })
-        auth_url = f"{self.AUTH_URL}?{params}"
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                from urllib.parse import urlparse, parse_qs
-                p = parse_qs(urlparse(self.path).query)
-                code_list = p.get("code", [])
-                if code_list:
-                    self.server.auth_code.append(code_list[0])
-                    self.send_response(200)
-                    self.send_header("Content-type", "text/html")
-                    self.end_headers()
-                    self.wfile.write(b"<html><body><h1>Authorized!</h1><p>Close this window.</p></body></html>")
+        elapsed = 0
+        while elapsed < timeout:
+            try:
+                raw_token = self._credentials.token_from_code(device_code)
+                if "access_token" in raw_token:
+                    return self._save_token(raw_token)
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "authorization_pending" in error_msg:
+                    pass
+                elif "slow_down" in error_msg:
+                    interval += 1
+                elif "expired_token" in error_msg:
+                    raise Exception("Device code expired. Please try again.")
                 else:
-                    self.send_response(400)
-                    self.end_headers()
-                    self.wfile.write(b"<html><body><h1>Error</h1></body></html>")
-
-            def log_message(self, fmt, *args):
-                pass
-
-        self._server = HTTPServer(("localhost", self._port), Handler)
-        self._server.auth_code = self._auth_code
-
-        import threading
-        self._server_thread = threading.Thread(target=self._server.serve_forever)
-        self._server_thread.daemon = True
-        self._server_thread.start()
-
-        import webbrowser
-        try:
-            webbrowser.open(auth_url)
-        except Exception:
-            pass
-
-        return auth_url
-
-    def wait_for_code(self, timeout=300):
-        import time
-        for _ in range(timeout * 2):
-            if self._auth_code:
-                return self._auth_code[0]
-            time.sleep(0.5)
+                    raise
+            _time.sleep(interval)
+            elapsed += interval
         raise TimeoutError("Authorization timed out")
 
-    def exchange(self, code):
-        import httpx
-        resp = httpx.post(
-            self.TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "redirect_uri": f"http://localhost:{self._port}/",
-                "grant_type": "authorization_code",
-            },
-        )
-        data = resp.json()
-        if "access_token" in data:
-            self._save_tokens(data)
-            return True
-        raise Exception(data.get("error_description", data.get("error", "unknown error")))
-
-    def _save_tokens(self, data):
-        import time
+    def _save_token(self, raw_token):
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        data["expires_at"] = time.time() + data.get("expires_in", 3600)
-        data["_client_id"] = self.client_id
-        data["_client_secret"] = self.client_secret
+        refresh_token_expires_in = raw_token.get(
+            "refresh_token_expires_in", raw_token.get("expires_in", 3600)
+        )
+        token_data = {
+            "access_token": raw_token["access_token"],
+            "refresh_token": raw_token["refresh_token"],
+            "scope": raw_token.get("scope", "https://www.googleapis.com/auth/youtube"),
+            "token_type": raw_token.get("token_type", "Bearer"),
+            "expires_in": refresh_token_expires_in,
+            "expires_at": int(time.time()) + refresh_token_expires_in,
+            "_client_id": self.client_id,
+            "_client_secret": self.client_secret,
+        }
         with open(OAUTH_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-
-    def close(self):
-        if self._server:
-            self._server.shutdown()
+            json.dump(token_data, f, indent=2)
+        return True

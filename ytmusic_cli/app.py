@@ -54,6 +54,10 @@ class YTMusicApp(App):
         else:
             self.push_screen(AuthScreen(self.api), callback=self._on_auth_done)
 
+    def on_exit(self):
+        if self.player:
+            self.player.quit()
+
     def _on_auth_done(self, success):
         if success:
             self.push_screen(MainScreen())
@@ -68,7 +72,15 @@ class YTMusicApp(App):
         self.set_interval(0.5, self._sync_player_state)
 
     def _on_track_end(self):
-        self.call_from_thread(self.next_track)
+        self.call_from_thread(self._handle_track_end)
+
+    def _handle_track_end(self):
+        if self.playback_state == "stopped":
+            return
+        if self.repeat_mode == "one" and self.queue:
+            self._play_current()
+            return
+        self.next_track()
 
     def _on_player_error(self, event):
         self.call_from_thread(self.notify, "Playback error", severity="error")
@@ -119,6 +131,7 @@ class YTMusicApp(App):
             return
         if self.shuffle:
             import random
+
             n = len(self.queue)
             if n > 1:
                 offset = random.randint(1, n - 1)
@@ -165,10 +178,12 @@ class YTMusicApp(App):
             self.player.seek_relative(-10)
 
     def stop_playback(self):
-        if self.player:
-            self.player.stop()
         self.playback_state = "stopped"
         self.current_track = None
+        self.position = 0.0
+        self.duration = 0.0
+        if self.player:
+            self.player.stop()
 
     def cycle_repeat(self):
         modes = ["off", "all", "one"]

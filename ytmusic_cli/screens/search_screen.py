@@ -7,10 +7,15 @@ from ytmusic_cli.widgets.track_table import TrackTable
 from ytmusic_cli.screens.playlist_screen import PlaylistScreen
 
 
+def _make_list_item(label, data):
+    item = ListItem(Static(label))
+    item.data = data
+    return item
+
+
 class SearchScreen(Screen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
-        ("enter", "select_focused", "Select"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -18,21 +23,21 @@ class SearchScreen(Screen):
             yield Input(placeholder="Search songs, albums, artists...", id="search-input")
             with TabbedContent(id="search-tabs"):
                 with TabPane("All", id="all"):
-                    yield Static("", id="search-all")
+                    yield Vertical(Static("Type to search..."), id="search-all-wrap")
                 with TabPane("Songs", id="songs"):
-                    yield Static("", id="search-songs")
+                    yield Vertical(id="search-songs-wrap")
                 with TabPane("Albums", id="albums"):
-                    yield Static("", id="search-albums")
+                    yield Vertical(id="search-albums-wrap")
                 with TabPane("Playlists", id="playlists"):
-                    yield Static("", id="search-playlists")
+                    yield Vertical(id="search-playlists-wrap")
                 with TabPane("Artists", id="artists"):
-                    yield Static("", id="search-artists")
+                    yield Vertical(Static(""), id="search-artists-wrap")
 
     def on_mount(self):
         self.query_one("#search-input", Input).focus()
 
-    def on_input_changed(self, event: Input.Changed):
-        if len(event.value) >= 2:
+    def on_input_submitted(self, event: Input.Submitted):
+        if len(event.value) >= 1:
             self._do_search(event.value)
 
     @work(exclusive=True, thread=True)
@@ -55,8 +60,14 @@ class SearchScreen(Screen):
         self._display_playlists_tab(playlists)
         self._display_artists_tab(artists)
 
+    def _clear_wrap(self, wrap_id):
+        wrap = self.query_one(f"#{wrap_id}", Vertical)
+        for child in list(wrap.children):
+            child.remove()
+        return wrap
+
     def _display_all(self, results):
-        widget = self.query_one("#search-all", Static)
+        wrap = self._clear_wrap("search-all-wrap")
         lines = []
         for r in results[:30]:
             rt = r.get("resultType", "")
@@ -75,37 +86,38 @@ class SearchScreen(Screen):
                 lines.append(f"[magenta]AR[/magenta] {title}")
             else:
                 lines.append(f"  {title}")
-        widget.update("\n".join(lines) if lines else "No results")
+        wrap.mount(Static("\n".join(lines) if lines else "No results"))
 
     def _display_songs(self, songs):
-        widget = self.query_one("#search-songs", Static)
+        wrap = self._clear_wrap("search-songs-wrap")
         if songs:
             table = TrackTable(id="search-song-table")
             table.set_tracks(songs)
-            widget.update("")
-            widget.remove()
-            songs_pane = self.query_one("#songs", TabPane)
-            songs_pane.mount(table)
+            wrap.mount(table)
+            table.focus()
         else:
-            widget.update("No songs found")
+            wrap.mount(Static("No songs found"))
 
     def _display_albums_tab(self, albums):
-        widget = self.query_one("#search-albums", Static)
+        wrap = self._clear_wrap("search-albums-wrap")
         if albums:
             lv = ListView(id="search-album-list")
             for a in albums:
                 title = a.get("title", "Unknown")
                 artist = a.get("artist", "?")
                 bid = a.get("browseId", "")
-                lv.append(ListItem(Static(f"{title} - {artist}"), data={"type": "album", "id": bid}))
-            widget.remove()
-            albums_pane = self.query_one("#albums", TabPane)
-            albums_pane.mount(lv)
+                lv.append(
+                    _make_list_item(
+                        f"{title} - {artist}",
+                        {"type": "album", "id": bid},
+                    )
+                )
+            wrap.mount(lv)
         else:
-            widget.update("No albums found")
+            wrap.mount(Static("No albums found"))
 
     def _display_playlists_tab(self, playlists):
-        widget = self.query_one("#search-playlists", Static)
+        wrap = self._clear_wrap("search-playlists-wrap")
         if playlists:
             lv = ListView(id="search-playlist-list")
             for p in playlists:
@@ -113,44 +125,50 @@ class SearchScreen(Screen):
                 author = p.get("author", "?")
                 pid = p.get("browseId", p.get("playlistId", ""))
                 count = p.get("itemCount", "?")
-                lv.append(ListItem(Static(f"{title} ({author}) - {count} tracks"),
-                                   data={"type": "playlist", "id": pid}))
-            widget.remove()
-            playlists_pane = self.query_one("#playlists", TabPane)
-            playlists_pane.mount(lv)
+                lv.append(
+                    _make_list_item(
+                        f"{title} ({author}) - {count} tracks",
+                        {"type": "playlist", "id": pid},
+                    )
+                )
+            wrap.mount(lv)
         else:
-            widget.update("No playlists found")
+            wrap.mount(Static("No playlists found"))
 
     def _display_artists_tab(self, artists):
-        widget = self.query_one("#search-artists", Static)
+        wrap = self._clear_wrap("search-artists-wrap")
         lines = []
         for a in artists:
             lines.append(a.get("title", "Unknown"))
-        widget.update("\n".join(lines) if lines else "No artists found")
+        wrap.mount(Static("\n".join(lines) if lines else "No artists found"))
 
     def _show_error(self, msg):
-        self.query_one("#search-all", Static).update(f"[red]Error: {msg}[/red]")
+        try:
+            wrap = self.query_one("#search-all-wrap", Vertical)
+            for child in list(wrap.children):
+                child.remove()
+            wrap.mount(Static(f"[red]Error: {msg}[/red]"))
+        except Exception:
+            pass
 
     def on_list_view_selected(self, event):
         item = event.item
         data = item.data
-        if data:
-            if data["type"] == "playlist" and data["id"]:
-                self.app.push_screen(PlaylistScreen(data["id"], title="Playlist"))
-            elif data["type"] == "album" and data["id"]:
-                self.app.push_screen(PlaylistScreen(data["id"], title="Album"))
+        if not data:
+            return
+        item_type = data.get("type", "")
+        item_id = data.get("id", "")
+        if item_type == "playlist" and item_id:
+            self.app.push_screen(PlaylistScreen(item_id, title="Playlist", is_album=False))
+        elif item_type == "album" and item_id:
+            self.app.push_screen(PlaylistScreen(item_id, title="Album", is_album=True))
 
     def on_data_table_row_selected(self, event):
         try:
             table = self.query_one("#search-song-table", TrackTable)
         except Exception:
             return
-        if event.row_key and table._tracks:
+        if event.row_key is not None and table._tracks:
             idx = int(str(event.row_key)) - 1
             if 0 <= idx < len(table._tracks):
                 self.app.play_track(table._tracks[idx])
-
-    def select_focused(self):
-        focused = self.focused
-        if focused and hasattr(focused, "action_select"):
-            focused.action_select()

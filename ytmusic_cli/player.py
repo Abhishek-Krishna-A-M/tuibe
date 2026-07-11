@@ -3,6 +3,7 @@ import mpv
 
 class MusicPlayer:
     def __init__(self, on_track_end=None, on_error=None):
+        self._stopped = False
         self.player = mpv.MPV(
             ytdl=True,
             ytdl_format="bestaudio[ext=m4a]/bestaudio",
@@ -25,13 +26,25 @@ class MusicPlayer:
 
             @self.player.property_observer("eof-reached")
             def _on_eof(_name, value):
-                if value:
+                if value and not self._stopped:
                     on_track_end()
 
         if on_error:
-            self.player.register_event_callback(lambda e: on_error(e) if e.event_id == b"file-error" else None)
+
+            @self.player.property_observer("idle-active")
+            def _on_idle(_name, value):
+                pass
+
+            def _event_handler(event):
+                if event.event_id == mpv.MpvEventID.END_FILE:
+                    data = event.data
+                    if hasattr(data, "reason") and data.reason != 0:
+                        on_error(event)
+
+            self.player.register_event_callback(_event_handler)
 
     def play(self, url_or_video_id):
+        self._stopped = False
         if not url_or_video_id.startswith("http"):
             url_or_video_id = f"https://music.youtube.com/watch?v={url_or_video_id}"
         self.player.play(url_or_video_id)
@@ -46,6 +59,7 @@ class MusicPlayer:
         self.player.cycle("pause")
 
     def stop(self):
+        self._stopped = True
         self.player.stop()
 
     def seek(self, position_seconds):

@@ -8,6 +8,12 @@ from ytmusic_cli.widgets.track_table import TrackTable
 from ytmusic_cli.screens.playlist_screen import PlaylistScreen
 
 
+def _make_list_item(label, data):
+    item = ListItem(Static(label))
+    item.data = data
+    return item
+
+
 class MainScreen(Screen):
     BINDINGS = [
         ("j", "cursor_down", "Down"),
@@ -114,7 +120,12 @@ class MainScreen(Screen):
             title = p.get("title", "Unknown")
             pid = p.get("browseId", p.get("playlistId", ""))
             count = p.get("count", "?")
-            lv.append(ListItem(Static(f"{title} ({count} tracks)"), data={"type": "playlist", "id": pid}))
+            lv.append(
+                _make_list_item(
+                    f"{title} ({count} tracks)",
+                    {"type": "playlist", "id": pid},
+                )
+            )
         self.query_one("#content-body", Vertical).mount(lv)
         lv.focus()
 
@@ -128,7 +139,9 @@ class MainScreen(Screen):
             artist = artists[0].get("name", "Unknown") if artists else "Unknown"
             year = a.get("year", "")
             label = f"{title} - {artist}" + (f" ({year})" if year else "")
-            lv.append(ListItem(Static(label), data={"type": "album", "id": bid}))
+            lv.append(
+                _make_list_item(label, {"type": "album", "id": bid})
+            )
         self.query_one("#content-body", Vertical).mount(lv)
         lv.focus()
 
@@ -139,18 +152,21 @@ class MainScreen(Screen):
     def on_list_view_selected(self, event):
         item = event.item
         data = item.data
-        if data:
-            if data["type"] == "playlist" and data["id"]:
-                self.app.push_screen(PlaylistScreen(data["id"], title="Playlist"))
-            elif data["type"] == "album" and data["id"]:
-                self.app.push_screen(PlaylistScreen(data["id"], title="Album"))
+        if not data:
+            return
+        item_type = data.get("type", "")
+        item_id = data.get("id", "")
+        if item_type == "playlist" and item_id:
+            self.app.push_screen(PlaylistScreen(item_id, title="Playlist", is_album=False))
+        elif item_type == "album" and item_id:
+            self.app.push_screen(PlaylistScreen(item_id, title="Album", is_album=True))
 
     def on_data_table_row_selected(self, event):
         try:
             table = self.query_one("#track-table", TrackTable)
         except Exception:
             return
-        if event.row_key and table._tracks:
+        if event.row_key is not None and table._tracks:
             idx = int(str(event.row_key)) - 1
             if 0 <= idx < len(table._tracks):
                 self.app.play_track(table._tracks[idx])
@@ -159,10 +175,14 @@ class MainScreen(Screen):
         self.query_one("#library-tree", Tree).focus()
 
     def focus_content(self):
-        focused = self.focused
-        table = self.query_one("#track-table", TrackTable)
-        if focused != table:
+        try:
+            table = self.query_one("#track-table", TrackTable)
             table.focus()
+        except Exception:
+            try:
+                self.query_one("#content-list", ListView).focus()
+            except Exception:
+                pass
 
     def cursor_down(self):
         focused = self.focused

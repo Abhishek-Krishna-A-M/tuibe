@@ -38,7 +38,6 @@ Screen {
 }
 
 #content-body {
-    padding: 1;
     height: 1fr;
 }
 
@@ -57,29 +56,29 @@ Screen {
     height: 3;
 }
 
-#now-playing-info {
+#np-info {
     width: 1fr;
     padding: 0 1;
     content-align: left middle;
 }
 
-#now-playing-progress {
+#np-progress {
     width: 30;
 }
 
-#now-playing-time {
+#np-time {
     width: 16;
     content-align: center middle;
 }
 
-#now-playing-volume {
+#np-vol {
     width: 12;
     content-align: right middle;
     padding: 0 1;
 }
 
 SearchScreen {
-    align: center top;
+    layout: vertical;
 }
 
 SearchScreen Input {
@@ -92,8 +91,8 @@ SearchScreen Input {
     margin: 0 1;
 }
 
-TabPane Static {
-    padding: 1;
+TabPane {
+    height: 1fr;
 }
 
 #playlist-header {
@@ -112,5 +111,13 @@ TabPane Static {
 }
 
 #playlist-tracks {
+    height: 1fr;
+}
+
+#content-list {
+    height: 1fr;
+}
+
+#search-song-table {
     height: 1fr;
 }

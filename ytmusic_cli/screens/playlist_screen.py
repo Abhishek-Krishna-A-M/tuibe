@@ -12,10 +12,11 @@ class PlaylistScreen(Screen):
         ("enter", "play_selected", "Play"),
     ]
 
-    def __init__(self, playlist_id, title="Playlist"):
+    def __init__(self, playlist_id, title="Playlist", is_album=False):
         super().__init__()
         self._playlist_id = playlist_id
         self._title = title
+        self._is_album = is_album
         self._tracks = []
 
     def compose(self) -> ComposeResult:
@@ -32,10 +33,14 @@ class PlaylistScreen(Screen):
     @work(thread=True)
     def _load(self):
         try:
-            data = self.app.api.get_playlist(self._playlist_id)
+            if self._is_album:
+                data = self.app.api.get_album(self._playlist_id)
+            else:
+                data = self.app.api.get_playlist(self._playlist_id)
             tracks = data.get("tracks", [])
             self._tracks = tracks
-            self.app.call_from_thread(self._display, tracks, data.get("title", self._title))
+            title = data.get("title", self._title)
+            self.app.call_from_thread(self._display, tracks, title)
         except Exception as e:
             self.app.call_from_thread(self._show_error, str(e))
 
@@ -43,6 +48,7 @@ class PlaylistScreen(Screen):
         self.query_one("#playlist-header", Static).update(title)
         table = self.query_one("#playlist-tracks", TrackTable)
         table.set_tracks(tracks)
+        table.focus()
 
     def _show_error(self, msg):
         header = self.query_one("#playlist-header", Static)
@@ -53,13 +59,27 @@ class PlaylistScreen(Screen):
             self.app.play_playlist(self._tracks)
         elif event.button.id == "shuffle" and self._tracks:
             import random
+
             shuffled = list(self._tracks)
             random.shuffle(shuffled)
             self.app.play_playlist(shuffled)
 
+    def play_selected(self):
+        try:
+            table = self.query_one("#playlist-tracks", TrackTable)
+            if table.cursor_row is not None and table._tracks:
+                idx = table.cursor_row
+                if 0 <= idx < len(table._tracks):
+                    self.app.play_track(table._tracks[idx])
+        except Exception:
+            pass
+
     def on_data_table_row_selected(self, event):
-        table = self.query_one("#playlist-tracks", TrackTable)
-        if event.row_key and table._tracks:
+        try:
+            table = self.query_one("#playlist-tracks", TrackTable)
+        except Exception:
+            return
+        if event.row_key is not None and table._tracks:
             idx = int(str(event.row_key)) - 1
             if 0 <= idx < len(table._tracks):
                 self.app.play_track(table._tracks[idx])
