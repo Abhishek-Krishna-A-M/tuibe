@@ -35,6 +35,7 @@ pub enum InputMode {
     Search,
     NewPlaylist,
     AddToPlaylist,
+    ImportPlaylist,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -92,6 +93,7 @@ pub struct App {
     pub(crate) search_rx: Option<mpsc::Receiver<SearchResult>>,
     pub(crate) related_rx: Option<mpsc::Receiver<Vec<Track>>>,
     pub(crate) pending_add_track: Option<Track>,
+    pub(crate) import_rx: Option<mpsc::Receiver<(String, Vec<Track>)>>,
 }
 
 impl App {
@@ -139,6 +141,7 @@ impl App {
             search_rx: None,
             related_rx: None,
             pending_add_track: None,
+            import_rx: None,
         };
         let _ = app.player_cmd.send(PlayerCommand::SetVolume(app.volume));
         app

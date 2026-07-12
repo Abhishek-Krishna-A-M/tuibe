@@ -121,6 +121,7 @@ fn run_app(
         app.drain_player_events();
         app.drain_search_results();
         app.drain_related();
+        app.drain_import();
         app.update_visualizer();
         terminal.draw(|frame| ui::render(frame, app))?;
     }

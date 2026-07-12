@@ -3,6 +3,7 @@ use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
 const PYTHON_SCRIPT: &str = include_str!("../../scripts/ytmusic_helper.py");
 
@@ -71,4 +72,22 @@ pub fn run_python(args: &[&str]) -> Result<String> {
     }
 
     String::from_utf8(output.stdout).context("invalid utf-8 from python helper")
+}
+
+#[derive(Deserialize)]
+struct PlaylistResult {
+    name: String,
+    tracks: Vec<super::events::Track>,
+}
+
+pub fn fetch_playlist(url_or_id: &str) -> (String, Vec<super::events::Track>) {
+    match run_python(&["playlist", url_or_id]) {
+        Ok(stdout) => {
+            match serde_json::from_str::<PlaylistResult>(&stdout) {
+                Ok(pr) => (pr.name, pr.tracks),
+                Err(_) => (format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
+            }
+        }
+        Err(_) => (format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
+    }
 }

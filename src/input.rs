@@ -43,6 +43,7 @@ pub enum Action {
     CavaBarsDown,
     RemoveFromQueue,
     AddToPlaylist,
+    ImportPlaylist,
     Quit,
 }
 
@@ -83,6 +84,7 @@ pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
             KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
             KeyCode::Enter => Some(Action::EnterPlaylist),
             KeyCode::Char('N') => Some(Action::NewPlaylist),
+            KeyCode::Char('I') => Some(Action::ImportPlaylist),
             KeyCode::Char('d') => Some(Action::DeletePlaylist),
             KeyCode::Char('n') => Some(Action::Next),
             KeyCode::Char(' ') => Some(Action::PauseResume),
@@ -131,6 +133,7 @@ pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
             KeyCode::Char('q') => Some(Action::Quit),
             KeyCode::Char('j') | KeyCode::Down => Some(Action::MoveDown),
             KeyCode::Char('k') | KeyCode::Up => Some(Action::MoveUp),
+            KeyCode::Enter => Some(Action::PlaySelected),
             KeyCode::Char('d') => Some(Action::RemoveFromQueue),
             KeyCode::Char(' ') => Some(Action::PauseResume),
             KeyCode::Char('n') => Some(Action::Next),

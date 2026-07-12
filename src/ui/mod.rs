@@ -16,6 +16,38 @@ pub fn render(frame: &mut ratatui::Frame, app: &App) {
         Some(InputMode::AddToPlaylist) => {
             render_playlist_picker(frame, app, layout.content);
         }
+        Some(InputMode::ImportPlaylist) => {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(ratatui::widgets::BorderType::Rounded)
+                .border_style(Style::default().fg(Color::Rgb(124, 58, 237)))
+                .title(" Import Playlist ");
+            let inner = block.inner(layout.content);
+            frame.render_widget(block, layout.content);
+
+            let display_text = if app.input_text.is_empty() {
+                ratatui::text::Span::styled(
+                    " Paste a YouTube Music playlist URL or ID...",
+                    Style::default().fg(Color::DarkGray),
+                )
+            } else {
+                ratatui::text::Span::styled(
+                    format!(" {}", app.input_text),
+                    Style::default().fg(Color::White),
+                )
+            };
+
+            let input_inner = Rect {
+                x: inner.x + 1,
+                y: inner.y + 1,
+                width: inner.width.saturating_sub(2),
+                height: inner.height.saturating_sub(2),
+            };
+            frame.render_widget(
+                ratatui::widgets::Paragraph::new(ratatui::text::Line::from(display_text)),
+                input_inner,
+            );
+        }
         Some(ref mode) => {
             components::search::render_input_prompt(frame, mode, &app.input_text, app.cursor, layout.content);
         }
@@ -31,14 +63,15 @@ pub fn render(frame: &mut ratatui::Frame, app: &App) {
             components::playlist::render_playlist_browser(frame, app, inner);
         }
         Screen::PlaylistDetail => {
-            let block = Block::default()
+            components::playlist::render_playlist_detail(frame, app, layout.results);
+            let queue_block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(ratatui::widgets::BorderType::Rounded)
                 .border_style(Style::default().fg(Color::DarkGray))
-                .title(" Playlist ");
-            let inner = block.inner(layout.content);
-            frame.render_widget(block, layout.content);
-            components::playlist::render_playlist_detail(frame, app, inner);
+                .title(format!(" Queue ({}) ", app.queue.len()));
+            let queue_inner = queue_block.inner(layout.queue);
+            frame.render_widget(queue_block, layout.queue);
+            components::render_queue(frame, app, queue_inner, false);
         }
             Screen::Queue => {
                 render_queue_layout(frame, app, &layout);

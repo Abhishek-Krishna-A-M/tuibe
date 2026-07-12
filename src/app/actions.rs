@@ -90,6 +90,12 @@ impl App {
             }
 
             Action::PlaySelected => match self.screen {
+                Screen::Queue => {
+                    if let Some(track) = self.queue.get(self.queue_selected).cloned() {
+                        self.queue_index = self.queue_selected;
+                        self.play_track(track);
+                    }
+                }
                 Screen::PlaylistDetail => {
                     if let Some(pl_id) = &self.playlist_detail_id {
                         if let Some(pl) = self.playlists.playlists.iter().find(|p| p.id == *pl_id) {
@@ -257,6 +263,20 @@ impl App {
                     self.input_mode = None;
                     self.input_text.clear();
                 }
+                Some(InputMode::ImportPlaylist) => {
+                    let input = self.input_text.trim().to_string();
+                    if !input.is_empty() {
+                        self.input_mode = None;
+                        self.input_text.clear();
+                        self.cursor = 0;
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        std::thread::spawn(move || {
+                            let result = crate::search::ytmusic_helper::fetch_playlist(&input);
+                            let _ = tx.send(result);
+                        });
+                        self.import_rx = Some(rx);
+                    }
+                }
                 Some(InputMode::Search) => {
                     let query = self.input_text.trim().to_string();
                     if !query.is_empty() {
@@ -343,6 +363,11 @@ impl App {
                     self.input_mode = Some(InputMode::AddToPlaylist);
                     self.playlist_selected = 0;
                 }
+            }
+            Action::ImportPlaylist => {
+                self.input_mode = Some(InputMode::ImportPlaylist);
+                self.input_text.clear();
+                self.cursor = 0;
             }
             Action::ToggleAutoplay => {
                 self.autoplay = !self.autoplay;
@@ -511,6 +536,20 @@ impl App {
                     }
                 }
                 self.related_rx = None;
+            }
+        }
+    }
+
+    pub fn drain_import(&mut self) {
+        if let Some(ref rx) = self.import_rx {
+            if let Ok((name, tracks)) = rx.try_recv() {
+                if !tracks.is_empty() {
+                    let id = self.playlists.create(&name);
+                    for t in tracks {
+                        self.playlists.add_track(&id, t);
+                    }
+                }
+                self.import_rx = None;
             }
         }
     }

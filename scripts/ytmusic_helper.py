@@ -124,6 +124,38 @@ def cmd_related(args):
     print(json.dumps(tracks))
 
 
+def cmd_playlist(args):
+    raw = args[0] if args else ""
+    if not raw:
+        print(json.dumps({"name": "", "tracks": []}))
+        return
+
+    playlist_id = raw
+
+    if "?" in raw and "list=" in raw:
+        from urllib.parse import parse_qs, urlparse
+        parsed = urlparse(raw)
+        qs = parse_qs(parsed.query)
+        playlist_id = qs.get("list", [raw])[0]
+    elif "/playlist/" in raw:
+        playlist_id = raw.rstrip("/").split("/playlist/")[-1]
+        if "?" in playlist_id:
+            playlist_id = playlist_id.split("?")[0]
+
+    yt = get_yt()
+    pl = yt.get_playlist(playlist_id, limit=None)
+
+    tracks = []
+    for r in pl.get("tracks", []):
+        tracks.append(normalize(r))
+
+    result = {
+        "name": pl.get("title", "Imported Playlist"),
+        "tracks": tracks,
+    }
+    print(json.dumps(result))
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps([]), file=sys.stderr)
@@ -136,6 +168,8 @@ def main():
         cmd_search(args)
     elif cmd == "related":
         cmd_related(args)
+    elif cmd == "playlist":
+        cmd_playlist(args)
     else:
         print(json.dumps([]), file=sys.stderr)
         sys.exit(1)
