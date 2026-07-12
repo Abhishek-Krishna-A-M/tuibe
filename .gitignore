@@ -4,8 +4,9 @@
 *~
 .DS_Store
 
-# Python archive
+# Python
 python/
+__pycache__/
 .venv/
 
 # Agent files
