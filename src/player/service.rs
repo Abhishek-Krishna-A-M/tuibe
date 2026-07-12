@@ -76,7 +76,7 @@ fn run_player(
     let mut last_progress = Instant::now();
     let mut last_pos = Duration::ZERO;
     let mut stalled_cycles: u32 = 0;
-    let mut empty_cycles: u32 = 0;
+    let mut seek_cooldown = Instant::now();
 
     loop {
         while let Ok(cmd) = cmd_rx.try_recv() {
@@ -94,7 +94,7 @@ fn run_player(
                     track_dur = Duration::ZERO;
                     last_pos = Duration::ZERO;
                     stalled_cycles = 0;
-                    empty_cycles = 0;
+                    seek_cooldown = Instant::now();
 
                     player.stop();
                     drain_player(&player, Duration::from_millis(200));
@@ -140,7 +140,7 @@ fn run_player(
                     last_progress = Instant::now();
                     last_pos = pos;
                     stalled_cycles = 0;
-                    empty_cycles = 0;
+                    seek_cooldown = Instant::now();
                     let _ = evt_tx.send(PlayerEvent::Progress {
                         position: pos,
                         duration: track_dur,
@@ -167,30 +167,25 @@ fn run_player(
                     duration: track_dur,
                 });
 
-                let is_empty = player.empty();
+                // Guard: skip finished detection for 500ms after seek (rodio can
+                // report empty/near-end briefly while rebuffering after a seek)
+                let can_detect = seek_cooldown.elapsed() >= Duration::from_millis(500);
 
-                // Debounce empty: need 2 consecutive ticks (500ms) to confirm EOF
-                if is_empty {
-                    empty_cycles += 1;
-                } else {
-                    empty_cycles = 0;
-                }
-
-                // Detect finished: source exhausted and position at/near duration
-                let near_end = track_dur > Duration::ZERO
+                let is_empty = can_detect && player.empty();
+                let near_end = can_detect
+                    && track_dur > Duration::ZERO
                     && pos >= track_dur.saturating_sub(Duration::from_millis(500));
 
-                // Detect stalled: position hasn't advanced for 1+ second
                 if pos == last_pos {
                     stalled_cycles += 1;
                 } else {
                     stalled_cycles = 0;
                 }
-                let stalled = stalled_cycles >= 4; // 1 second with no progress
+                let stalled = stalled_cycles >= 4;
 
                 last_pos = pos;
 
-                if empty_cycles >= 2 || near_end || stalled {
+                if is_empty || near_end || stalled {
                     playing = false;
                     let _ = evt_tx.send(PlayerEvent::Finished);
                 }
