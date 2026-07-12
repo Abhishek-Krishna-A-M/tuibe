@@ -76,18 +76,19 @@ pub fn run_python(args: &[&str]) -> Result<String> {
 
 #[derive(Deserialize)]
 struct PlaylistResult {
+    id: String,
     name: String,
     tracks: Vec<super::events::Track>,
 }
 
-pub fn fetch_playlist(url_or_id: &str) -> (String, Vec<super::events::Track>) {
+pub fn fetch_playlist(url_or_id: &str) -> (String, String, Vec<super::events::Track>) {
     match run_python(&["playlist", url_or_id]) {
         Ok(stdout) => {
             match serde_json::from_str::<PlaylistResult>(&stdout) {
-                Ok(pr) => (pr.name, pr.tracks),
-                Err(_) => (format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
+                Ok(pr) => (pr.id, pr.name, pr.tracks),
+                Err(_) => (String::new(), format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
             }
         }
-        Err(_) => (format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
+        Err(_) => (String::new(), format!("Import ({})", &url_or_id[..url_or_id.len().min(12)]), vec![]),
     }
 }

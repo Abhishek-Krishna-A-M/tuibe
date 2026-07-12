@@ -54,6 +54,9 @@ fn main() -> Result<()> {
     let _ = app.player_cmd.send(player::PlayerCommand::SetVolume(app.volume));
     volume::PipeWireVolume::set(app.volume);
 
+    // Auto-sync imported playlists in background
+    app.sync_all();
+
     let mut last_vol_poll = std::time::Instant::now();
 
     let result = run_app(&mut terminal, &mut app, &mut last_vol_poll);
@@ -122,6 +125,7 @@ fn run_app(
         app.drain_search_results();
         app.drain_related();
         app.drain_import();
+        app.drain_sync();
         app.update_visualizer();
         terminal.draw(|frame| ui::render(frame, app))?;
     }

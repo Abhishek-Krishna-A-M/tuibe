@@ -150,6 +150,7 @@ def cmd_playlist(args):
         tracks.append(normalize(r))
 
     result = {
+        "id": playlist_id,
         "name": pl.get("title", "Imported Playlist"),
         "tracks": tracks,
     }

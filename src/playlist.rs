@@ -9,6 +9,8 @@ pub type PlaylistId = String;
 pub struct Playlist {
     pub id: PlaylistId,
     pub name: String,
+    #[serde(default)]
+    pub yt_id: Option<String>,
     pub tracks: Vec<Track>,
 }
 
@@ -17,6 +19,7 @@ impl Playlist {
         Self {
             id: id.into(),
             name: name.into(),
+            yt_id: None,
             tracks: Vec::new(),
         }
     }
@@ -80,6 +83,20 @@ impl PlaylistManager {
         id
     }
 
+    pub fn create_synced(&mut self, name: &str, yt_id: &str) -> PlaylistId {
+        let id = format!("pl_{}", name.to_lowercase().replace(' ', "_"));
+        let mut pl = Playlist::new(id.clone(), name);
+        pl.yt_id = Some(yt_id.to_string());
+        pl.tracks = Vec::new();
+        self.playlists.push(pl);
+        let _ = self.save();
+        id
+    }
+
+    pub fn find_by_yt_id(&self, yt_id: &str) -> Option<usize> {
+        self.playlists.iter().position(|p| p.yt_id.as_deref() == Some(yt_id))
+    }
+
     pub fn delete(&mut self, id: &str) {
         if id == "liked" { return; }
         self.playlists.retain(|p| p.id != id);
@@ -98,6 +115,22 @@ impl PlaylistManager {
     pub fn remove_track(&mut self, playlist_id: &str, track_id: &str) {
         if let Some(pl) = self.playlists.iter_mut().find(|p| p.id == playlist_id) {
             pl.tracks.retain(|t| t.id != track_id);
+            let _ = self.save();
+        }
+    }
+
+    /// Replace tracks from remote sync, preserving local-only additions at end
+    pub fn sync_replace(&mut self, yt_id: &str, remote: Vec<Track>) {
+        if let Some(idx) = self.find_by_yt_id(yt_id) {
+            let local = &self.playlists[idx].tracks;
+            // Keep local tracks whose IDs aren't in the remote
+            let local_only: Vec<Track> = local
+                .iter()
+                .filter(|t| !remote.iter().any(|r| r.id == t.id))
+                .cloned()
+                .collect();
+            self.playlists[idx].tracks = remote;
+            self.playlists[idx].tracks.extend(local_only);
             let _ = self.save();
         }
     }

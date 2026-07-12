@@ -12,7 +12,7 @@ Built with Rust, [ratatui](https://ratatui.rs), [rodio](https://github.com/RustA
 - **Keyboard-first** — vim-like navigation (j/k), full control without mouse
 - **Mouse support** — click to play, scroll to navigate
 - **PipeWire volume sync** — app volume controls system volume via `wpctl`
-- **Playlists** — create, delete, import from YouTube Music, save/restore local playlists; like/favorite tracks
+- **Playlists** — create, delete, import and sync from YouTube Music, save/restore local playlists; like/favorite tracks
 - **Queue management** — enqueue without playing (`a`), dedicated queue view (`Tab`), shuffle (`s`), repeat cycle (`r`: Off → Queue → One)
 - **Visualizer** — CAVA-powered full-width spectrum with pinkish gradient bars, white peak dots
 - **Nerd Font icons** — volume ``, shuffle ``, repeat `` / ` 1`
@@ -81,6 +81,7 @@ tuibe
 | `P` | Show playlists |
 | `A` | Add selected track to playlist |
 | `I` | Import playlist from YouTube Music URL |
+| `S` | Sync imported playlists (re-fetch from YouTube Music) |
 | `q` | Quit |
 | `Ctrl+C` | Quit |
 
@@ -93,7 +94,7 @@ tuibe
 | `}` | Bars up |
 
 **Queue view**: `Enter` play selected, `d` remove, `Tab` back
-**Playlist browser**: `N` new, `I` import, `d` delete, `Enter` open
+**Playlist browser**: `N` new, `I` import, `S` sync, `d` delete, `Enter` open
 **Playlist detail**: `Enter` play (full queue with selected track first), `d` remove from playlist, `Esc` back — queue panel on right
 
 Global playback controls (Space/S/n/p/s/r/f/v/t/Tab) work in all screens.

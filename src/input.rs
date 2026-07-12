@@ -44,6 +44,7 @@ pub enum Action {
     RemoveFromQueue,
     AddToPlaylist,
     ImportPlaylist,
+    SyncPlaylists,
     Quit,
 }
 
@@ -85,10 +86,10 @@ pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
             KeyCode::Enter => Some(Action::EnterPlaylist),
             KeyCode::Char('N') => Some(Action::NewPlaylist),
             KeyCode::Char('I') => Some(Action::ImportPlaylist),
+            KeyCode::Char('S') => Some(Action::SyncPlaylists),
             KeyCode::Char('d') => Some(Action::DeletePlaylist),
             KeyCode::Char('n') => Some(Action::Next),
             KeyCode::Char(' ') => Some(Action::PauseResume),
-            KeyCode::Char('S') => Some(Action::Stop),
             KeyCode::Char('p') => Some(Action::Previous),
             KeyCode::Char('s') => Some(Action::ToggleShuffle),
             KeyCode::Char('r') => Some(Action::ToggleRepeat),

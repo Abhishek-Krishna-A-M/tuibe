@@ -375,6 +375,9 @@ impl App {
                 self.input_text.clear();
                 self.cursor = 0;
             }
+            Action::SyncPlaylists => {
+                self.sync_all();
+            }
             Action::ToggleAutoplay => {
                 self.autoplay = !self.autoplay;
                 if !self.autoplay {
@@ -583,14 +586,50 @@ impl App {
 
     pub fn drain_import(&mut self) {
         if let Some(ref rx) = self.import_rx {
-            if let Ok((name, tracks)) = rx.try_recv() {
+            if let Ok((yt_id, name, tracks)) = rx.try_recv() {
                 if !tracks.is_empty() {
-                    let id = self.playlists.create(&name);
+                    let id = self.playlists.create_synced(&name, &yt_id);
                     for t in tracks {
                         self.playlists.add_track(&id, t);
                     }
                 }
                 self.import_rx = None;
+            }
+        }
+    }
+
+    pub fn sync_all(&mut self) {
+        let synced: Vec<String> = self.playlists.playlists.iter()
+            .filter_map(|p| p.yt_id.clone())
+            .collect();
+        if synced.is_empty() || self.sync_rx.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.sync_rx = Some(rx);
+        std::thread::spawn(move || {
+            for yt_id in synced {
+                let result = crate::search::ytmusic_helper::fetch_playlist(&yt_id);
+                let _ = tx.send(result);
+            }
+        });
+    }
+
+    pub fn drain_sync(&mut self) {
+        if let Some(ref rx) = self.sync_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok((yt_id, _name, tracks)) => {
+                        if !tracks.is_empty() && !yt_id.is_empty() {
+                            self.playlists.sync_replace(&yt_id, tracks);
+                        }
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.sync_rx = None;
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                }
             }
         }
     }

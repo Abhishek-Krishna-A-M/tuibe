@@ -118,7 +118,8 @@ pub struct App {
     pub(crate) search_rx: Option<mpsc::Receiver<SearchResult>>,
     pub(crate) related_rx: Option<mpsc::Receiver<Vec<Track>>>,
     pub(crate) pending_add_track: Option<Track>,
-    pub(crate) import_rx: Option<mpsc::Receiver<(String, Vec<Track>)>>,
+    pub(crate) import_rx: Option<mpsc::Receiver<(String, String, Vec<Track>)>>,
+    pub(crate) sync_rx: Option<mpsc::Receiver<(String, String, Vec<Track>)>>,
 }
 
 impl App {
@@ -167,6 +168,7 @@ impl App {
             related_rx: None,
             pending_add_track: None,
             import_rx: None,
+            sync_rx: None,
         };
         let _ = app.player_cmd.send(PlayerCommand::SetVolume(app.volume));
         app
