@@ -131,11 +131,13 @@ fn run_player(
                     playing = true;
                     player.play();
                     last_progress = Instant::now();
+                    stalled_cycles = 0;
                 }
                 PlayerCommand::Seek(pos) => {
                     let _ = player.try_seek(pos);
                     last_progress = Instant::now();
                     last_pos = pos;
+                    stalled_cycles = 0;
                     let _ = evt_tx.send(PlayerEvent::Progress {
                         position: pos,
                         duration: track_dur,
