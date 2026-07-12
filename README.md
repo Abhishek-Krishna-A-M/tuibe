@@ -8,14 +8,14 @@ Built with Rust, [ratatui](https://ratatui.rs), [rodio](https://github.com/RustA
 
 - **Search YouTube Music** — type `/`, enter a query (powered by ytmusicapi)
 - **Radio autoplay** — automatically queues related tracks as you listen (toggle with `t`)
-- **Streaming playback** — audio via mpv/libmpv, cached to `~/.cache/tuibe/`
+- **Streaming playback** — audio via rodio/yt-dlp, cached to `~/.cache/tuibe/`
 - **Keyboard-first** — vim-like navigation (j/k), full control without mouse
 - **Mouse support** — click to play, scroll to navigate
 - **PipeWire volume sync** — app volume controls system volume via `wpctl`
-- **Playlists** — create, delete, save/restore local playlists; like/favorite tracks
-- **Queue management** — enqueue without playing (`a`), dedicated queue view (`Tab`), shuffle (`s`), repeat one (`r`)
+- **Playlists** — create, delete, import from YouTube Music, save/restore local playlists; like/favorite tracks
+- **Queue management** — enqueue without playing (`a`), dedicated queue view (`Tab`), shuffle (`s`), repeat cycle (`r`: Off → Queue → One)
 - **Visualizer** — CAVA-powered full-width spectrum with pinkish gradient bars, white peak dots
-- **Nerd Font icons** — volume ``, shuffle ``, repeat ``
+- **Nerd Font icons** — volume ``, shuffle ``, repeat `` / ` 1`
 - **Transparent aesthetic** — no opaque backgrounds, lets your terminal theme shine through
 - **Fast startup** — zero async runtime, pure std threads + mpsc channels
 - **Audio caching** — LRU cache at `~/.cache/tuibe/`, 500MB default cap
@@ -75,11 +75,12 @@ tuibe
 | `v` | Toggle visualizer |
 | `f` | Toggle favorite (like/unlike current track) |
 | `s` | Toggle shuffle |
-| `r` | Toggle repeat (repeats current track) |
+| `r` | Cycle repeat: Off → Queue loop → Repeat one → Off |
 | `t` | Toggle autoplay (radio/related tracks) |
 | `Tab` | Toggle queue view (full-width) |
 | `P` | Show playlists |
 | `A` | Add selected track to playlist |
+| `I` | Import playlist from YouTube Music URL |
 | `q` | Quit |
 | `Ctrl+C` | Quit |
 
@@ -91,9 +92,9 @@ tuibe
 | `{` | Bars down |
 | `}` | Bars up |
 
-**Queue view**: `d` remove, `Tab` back
-**Playlist browser**: `N` new, `d` delete, `Enter` open
-**Playlist detail**: `d` remove from playlist, `Esc` back
+**Queue view**: `Enter` play selected, `d` remove, `Tab` back
+**Playlist browser**: `N` new, `I` import, `d` delete, `Enter` open
+**Playlist detail**: `Enter` play, `d` remove from playlist, `Esc` back — queue panel on right
 
 Global playback controls (Space/S/n/p/s/r/f/v/t/Tab) work in all screens.
 
@@ -128,27 +129,29 @@ quit = "q"
 ## Architecture
 
 ```
-UI Thread (ratatui)          Audio Thread (mpv)        Python (ytmusicapi)
-       │                           │                        │
-       │  PlayerCommand::Play      │                        │
-       │ ─────────────────────────▶│                        │
-       │                           │ mpv Stream             │
-       │  PlayerEvent::Progress    │   ▲                    │
+UI Thread (ratatui)       Audio Thread (rodio)      Python (ytmusicapi)
+       │                          │                        │
+       │  PlayerCommand::Play     │                        │
+       │ ────────────────────────▶│                        │
+       │                          │ yt-dlp → rodio decoder  │
+       │  PlayerEvent::Progress   │   ▲                    │
        │ ◀────────────────────────│   │                    │
-       │                           │   │                    │
-       │  read cava bars ◀───────────────────────────────   │
-       │                           │                        │
-   python3 -c helper search   ◀───┘                        │
-   ──▶ search results                                        │
-   python3 -c helper related ◀────────────────────────────── │
-   ──▶ radio tracks                                          │
+       │                          │   │                    │
+       │  read cava bars ◀────────────── CAVA subprocess    │
+       │                          │                        │
+   python3 -c helper search  ◀───┘                        │
+   ──▶ search results                                       │
+   python3 -c helper related ◀───────────────────────────── │
+   ──▶ radio tracks                                         │
+   python3 -c helper playlist ◀──────────────────────────── │
+   ──▶ playlist tracks                                      │
 ```
 
 - **No tokio** — std threads + mpsc channels
 - **No OAuth** — works without any account
-- **ytmusicapi** — used for search and radio via embedded Python script
-- **libmpv** — audio playback via rust bindings (no subprocess)
-- **Bounded storage** — 200MB temp file cap per stream
+- **ytmusicapi** — used for search, radio, and playlist import via embedded Python script
+- **rodio** — audio playback via yt-dlp streaming (no subprocess)
+- **Bounded storage** — 200MB temp file cap per stream, LRU cache at 500MB
 - **Generation counter** — stale play requests discarded on rapid skip
 - **CAVA visualizer** — raw 16-bit bar data read from subprocess stdout, peak dots managed in-app
 

@@ -5,7 +5,7 @@ use crate::player::{PlayerCommand, PlayerEvent};
 use crate::search::{self, SearchResult};
 use crate::search::Track;
 
-use super::state::{App, InputMode, PlaybackState, Screen, SearchState, VisualizerMode};
+use super::state::{App, InputMode, PlaybackState, RepeatMode, Screen, SearchState, VisualizerMode};
 
 impl App {
     pub fn dispatch(&mut self, action: Action) {
@@ -299,7 +299,7 @@ impl App {
             }
 
             Action::ToggleRepeat => {
-                self.repeat = !self.repeat;
+                self.repeat_mode = self.repeat_mode.next();
             }
             Action::ToggleShuffle => {
                 self.shuffle = !self.shuffle;
@@ -489,19 +489,25 @@ impl App {
                     }
                 }
                 PlayerEvent::Finished => {
-                    if self.repeat {
-                        if let Some(track) = &self.current_track {
-                            self.generation += 1;
-                            self.position = Duration::ZERO;
-                            self.playback_state = PlaybackState::Playing;
-                            let _ = self.player_cmd.send(PlayerCommand::Play {
-                                url: track.url.clone(),
-                                track_id: track.id.clone(),
-                                generation: self.generation,
-                            });
+                    match self.repeat_mode {
+                        RepeatMode::One => {
+                            if let Some(track) = &self.current_track {
+                                self.generation += 1;
+                                self.position = Duration::ZERO;
+                                self.playback_state = PlaybackState::Playing;
+                                let _ = self.player_cmd.send(PlayerCommand::Play {
+                                    url: track.url.clone(),
+                                    track_id: track.id.clone(),
+                                    generation: self.generation,
+                                });
+                            }
                         }
-                    } else {
-                        self.next_track();
+                        RepeatMode::Queue => {
+                            self.next_track();
+                        }
+                        RepeatMode::Off => {
+                            self.playback_state = PlaybackState::Stopped;
+                        }
                     }
                 }
                 PlayerEvent::Error(_) => {

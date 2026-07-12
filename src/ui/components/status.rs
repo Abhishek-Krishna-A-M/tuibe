@@ -17,10 +17,7 @@ pub fn render_status_bar(frame: &mut ratatui::Frame, app: &App, area: Rect) {
         ""
     };
 
-    let repeat_icon = match app.repeat {
-        true => " \u{f0b6}",
-        false => "",
-    };
+    let repeat_icon = app.repeat_mode.icon();
     let shuffle_icon = if app.shuffle { " " } else { "" };
     let autoplay_icon = if app.autoplay { " " } else { "" };
 

@@ -39,6 +39,31 @@ pub enum InputMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RepeatMode {
+    Off,
+    Queue,
+    One,
+}
+
+impl RepeatMode {
+    pub fn next(self) -> Self {
+        match self {
+            RepeatMode::Off => RepeatMode::Queue,
+            RepeatMode::Queue => RepeatMode::One,
+            RepeatMode::One => RepeatMode::Off,
+        }
+    }
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            RepeatMode::Off => "",
+            RepeatMode::Queue => " \u{f0b6}",
+            RepeatMode::One => " \u{f0b6} 1",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VisualizerMode {
     Spectrum,
     None,
@@ -72,7 +97,7 @@ pub struct App {
     pub queue_index: usize,
     pub queue_selected: usize,
     pub shuffle: bool,
-    pub repeat: bool,
+    pub repeat_mode: RepeatMode,
     pub autoplay: bool,
 
     pub terminal_height: u16,
@@ -122,7 +147,7 @@ impl App {
             queue_index: 0,
             queue_selected: 0,
             shuffle: false,
-            repeat: false,
+            repeat_mode: RepeatMode::Off,
             autoplay: true,
             terminal_height: 24,
             terminal_width: 80,
