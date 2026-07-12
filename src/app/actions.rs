@@ -101,14 +101,13 @@ impl App {
                         if let Some(pl) = self.playlists.playlists.iter().find(|p| p.id == *pl_id) {
                             if let Some(track) = pl.tracks.get(self.selected_index) {
                                 self.playlist_detail_id = Some(pl.id.clone());
-                                // Full playlist in queue, selected track first, rest in order
-                                let sel = track.clone();
-                                self.queue = vec![sel];
-                                for t in &pl.tracks {
-                                    if t.id != track.id {
-                                        self.queue.push(t.clone());
-                                    }
-                                }
+                                let idx = self.selected_index;
+                                let rotated: Vec<Track> = pl.tracks[idx..]
+                                    .iter()
+                                    .chain(pl.tracks[..idx].iter())
+                                    .cloned()
+                                    .collect();
+                                self.queue = rotated;
                                 self.queue_index = 0;
                                 self.queue_selected = 0;
                                 self.play_track(track.clone());
