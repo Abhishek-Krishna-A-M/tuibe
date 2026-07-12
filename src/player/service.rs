@@ -178,7 +178,7 @@ fn run_player(
 
                 last_pos = pos;
 
-                if (is_empty && track_dur > Duration::ZERO) || near_end || stalled {
+                if is_empty || near_end || stalled {
                     playing = false;
                     let _ = evt_tx.send(PlayerEvent::Finished);
                 }
