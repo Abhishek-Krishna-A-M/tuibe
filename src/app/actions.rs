@@ -513,7 +513,15 @@ impl App {
                             self.next_track();
                         }
                         RepeatMode::Off => {
-                            self.playback_state = PlaybackState::Stopped;
+                            let next = self.queue_index + 1;
+                            if next < self.queue.len() {
+                                self.queue_index = next;
+                                if let Some(track) = self.queue.get(next).cloned() {
+                                    self.play_track(track);
+                                }
+                            } else {
+                                self.playback_state = PlaybackState::Stopped;
+                            }
                         }
                     }
                 }
