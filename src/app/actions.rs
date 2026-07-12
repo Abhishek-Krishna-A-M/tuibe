@@ -519,6 +519,14 @@ impl App {
                                 if let Some(track) = self.queue.get(next).cloned() {
                                     self.play_track(track);
                                 }
+                            } else if let Some(ref track) = self.current_track.clone() {
+                                // End of queue — fetch related tracks
+                                self.playback_state = PlaybackState::Stopped;
+                                if self.related_rx.is_none() {
+                                    let (tx, rx) = std::sync::mpsc::channel();
+                                    crate::search::spawn_related(track, tx);
+                                    self.related_rx = Some(rx);
+                                }
                             } else {
                                 self.playback_state = PlaybackState::Stopped;
                             }
@@ -551,12 +559,24 @@ impl App {
     pub fn drain_related(&mut self) {
         if let Some(ref rx) = self.related_rx {
             if let Ok(tracks) = rx.try_recv() {
-                for t in tracks {
+                let was_stopped = self.playback_state == PlaybackState::Stopped;
+                for t in &tracks {
                     if !self.queue.iter().any(|qt| qt.id == t.id) {
-                        self.queue.push(t);
+                        self.queue.push(t.clone());
                     }
                 }
                 self.related_rx = None;
+                // Auto-play first new track if queue had ended
+                if was_stopped {
+                    if let Some(t) = tracks.into_iter().find(|t| {
+                        self.current_track.as_ref().map_or(true, |c| t.id != c.id)
+                    }) {
+                        self.queue_index = self.queue.iter()
+                            .position(|qt| qt.id == t.id)
+                            .unwrap_or(self.queue.len().saturating_sub(1));
+                        self.play_track(t);
+                    }
+                }
             }
         }
     }
