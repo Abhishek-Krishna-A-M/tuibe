@@ -101,7 +101,14 @@ impl App {
                         if let Some(pl) = self.playlists.playlists.iter().find(|p| p.id == *pl_id) {
                             if let Some(track) = pl.tracks.get(self.selected_index) {
                                 self.playlist_detail_id = Some(pl.id.clone());
-                                self.queue = pl.tracks[self.selected_index..].to_vec();
+                                // Full playlist in queue, selected track first, rest in order
+                                let sel = track.clone();
+                                self.queue = vec![sel];
+                                for t in &pl.tracks {
+                                    if t.id != track.id {
+                                        self.queue.push(t.clone());
+                                    }
+                                }
                                 self.queue_index = 0;
                                 self.queue_selected = 0;
                                 self.play_track(track.clone());
@@ -422,8 +429,9 @@ impl App {
             self.queue_index = self.queue.iter().position(|t| t.id == track.id).unwrap();
         }
 
-        // Auto-fill related tracks if autoplay is on and queue is short
-        if self.autoplay && self.related_rx.is_none() {
+        // Auto-fill related tracks (search only — not from playlist)
+        let from_playlist = self.screen == Screen::PlaylistDetail;
+        if self.autoplay && !from_playlist && self.related_rx.is_none() {
             let remaining = self.queue.len().saturating_sub(self.queue_index + 1);
             if remaining <= 2 {
                 let (tx, rx) = std::sync::mpsc::channel();
