@@ -7,7 +7,7 @@ Built with Rust, [ratatui](https://ratatui.rs), [rodio](https://github.com/RustA
 ## Features
 
 - **Search YouTube Music** — type `/`, enter a query (powered by ytmusicapi)
-- **Radio autoplay** — automatically queues related tracks as you listen (toggle with `t`)
+- **Radio autoplay** — automatically queues related tracks from search results; in playlists, only triggers when toggled with `t`
 - **Streaming playback** — audio via rodio/yt-dlp, cached to `~/.cache/tuibe/`
 - **Keyboard-first** — vim-like navigation (j/k), full control without mouse
 - **Mouse support** — click to play, scroll to navigate
@@ -94,9 +94,10 @@ tuibe
 
 **Queue view**: `Enter` play selected, `d` remove, `Tab` back
 **Playlist browser**: `N` new, `I` import, `d` delete, `Enter` open
-**Playlist detail**: `Enter` play, `d` remove from playlist, `Esc` back — queue panel on right
+**Playlist detail**: `Enter` play (full queue with selected track first), `d` remove from playlist, `Esc` back — queue panel on right
 
 Global playback controls (Space/S/n/p/s/r/f/v/t/Tab) work in all screens.
+Autoplay (`t`) auto-fills related tracks only from search — in playlists, enable manually with `t`.
 
 ### Mouse
 
