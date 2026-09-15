@@ -5,13 +5,15 @@ use crate::cava::CavaProcess;
 use crate::config::Config;
 use crate::player::{PlayerCommand, PlayerEvent};
 use crate::playlist::PlaylistManager;
-use crate::search::{SearchResult, Track};
+use crate::search::{ScopedResults, SearchResult, SearchScope, Track};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SearchState {
     Idle,
     Searching,
-    Loaded(Vec<Track>),
+    /// Loading tracks for one artist/album row.
+    LoadingDetail(String),
+    Loaded(ScopedResults),
     Error(String),
 }
 
@@ -84,6 +86,8 @@ pub struct App {
     pub input_text: String,
     pub cursor: usize,
     pub search_state: SearchState,
+    pub search_scope: SearchScope,
+    pub search_query: String,
     pub selected_index: usize,
     pub playlist_selected: usize,
     pub playlist_detail_id: Option<String>,
@@ -116,6 +120,8 @@ pub struct App {
     pub player_evt: mpsc::Receiver<PlayerEvent>,
     pub(crate) generation: u64,
     pub(crate) search_rx: Option<mpsc::Receiver<SearchResult>>,
+    pub(crate) detail_rx: Option<mpsc::Receiver<anyhow::Result<Vec<Track>>>>,
+    pub(crate) pending_detail_play: bool,
     pub(crate) related_rx: Option<mpsc::Receiver<Vec<Track>>>,
     pub(crate) pending_add_track: Option<Track>,
     pub(crate) import_rx: Option<mpsc::Receiver<(String, String, Vec<Track>)>>,
@@ -136,6 +142,8 @@ impl App {
             input_text: String::new(),
             cursor: 0,
             search_state: SearchState::Idle,
+            search_scope: SearchScope::Songs,
+            search_query: String::new(),
             selected_index: 0,
             playlist_selected: 0,
             playlist_detail_id: None,
@@ -165,6 +173,8 @@ impl App {
             player_evt,
             generation: 0,
             search_rx: None,
+            detail_rx: None,
+            pending_detail_play: false,
             related_rx: None,
             pending_add_track: None,
             import_rx: None,
@@ -189,8 +199,66 @@ impl App {
 
     pub(crate) fn current_results_len(&self) -> usize {
         match &self.search_state {
-            SearchState::Loaded(t) => t.len(),
+            SearchState::Loaded(r) => r.len(),
             _ => 0,
         }
+    }
+
+    /// Clamp `cursor` to a valid char boundary (unicode-safe).
+    pub fn clamp_cursor(&mut self) {
+        let len = self.input_text.len();
+        if self.cursor > len {
+            self.cursor = len;
+        }
+        while !self.input_text.is_char_boundary(self.cursor) && self.cursor > 0 {
+            self.cursor -= 1;
+        }
+    }
+
+    /// Move cursor one char left (unicode-safe).
+    pub fn cursor_left(&mut self) {
+        self.clamp_cursor();
+        if self.cursor == 0 {
+            return;
+        }
+        let mut next = self.cursor - 1;
+        while next > 0 && !self.input_text.is_char_boundary(next) {
+            next -= 1;
+        }
+        self.cursor = next;
+    }
+
+    /// Move cursor one char right (unicode-safe).
+    pub fn cursor_right(&mut self) {
+        self.clamp_cursor();
+        if self.cursor >= self.input_text.len() {
+            return;
+        }
+        let mut next = self.cursor + 1;
+        while next < self.input_text.len() && !self.input_text.is_char_boundary(next) {
+            next += 1;
+        }
+        self.cursor = next.min(self.input_text.len());
+    }
+
+    /// Insert a char at the cursor (unicode-safe).
+    pub fn insert_char(&mut self, c: char) {
+        self.clamp_cursor();
+        self.input_text.insert(self.cursor, c);
+        self.cursor += c.len_utf8();
+    }
+
+    /// Delete the char before the cursor (unicode-safe backspace).
+    pub fn backspace(&mut self) {
+        self.clamp_cursor();
+        if self.cursor == 0 {
+            return;
+        }
+        let mut start = self.cursor - 1;
+        while start > 0 && !self.input_text.is_char_boundary(start) {
+            start -= 1;
+        }
+        self.input_text.drain(start..self.cursor);
+        self.cursor = start;
     }
 }

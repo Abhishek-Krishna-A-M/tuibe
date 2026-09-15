@@ -2,12 +2,94 @@ use std::time::Duration;
 
 use crate::input::Action;
 use crate::player::{PlayerCommand, PlayerEvent};
-use crate::search::{self, SearchResult};
+use crate::search::{self, DetailRequest, ScopedResults, SearchResult};
 use crate::search::Track;
 
 use super::state::{App, InputMode, PlaybackState, RepeatMode, Screen, SearchState, VisualizerMode};
 
 impl App {
+    /// Shared search submit — parses `artist:` / `album:` / `movie:` / `song:` prefixes.
+    fn submit_search(&mut self) {
+        let raw = self.input_text.trim().to_string();
+        if raw.is_empty() {
+            return;
+        }
+        let (scope, query) = search::parse_query(&raw);
+        if query.is_empty() {
+            return;
+        }
+        self.input_mode = None;
+        self.selected_index = 0;
+        self.search_scope = scope;
+        self.search_query = query.clone();
+        self.search_state = SearchState::Searching;
+        self.detail_rx = None;
+        self.pending_detail_play = false;
+        let (tx, rx) = std::sync::mpsc::channel();
+        search::spawn_search(query, scope, tx);
+        self.search_rx = Some(rx);
+    }
+
+    /// Currently highlighted track (songs scope, queue, or playlist).
+    fn selected_track(&self) -> Option<Track> {
+        match self.screen {
+            Screen::PlaylistDetail => {
+                let pl_id = self.playlist_detail_id.as_ref()?;
+                let pl = self.playlists.playlists.iter().find(|p| p.id == *pl_id)?;
+                pl.tracks.get(self.selected_index).cloned()
+            }
+            _ => match &self.search_state {
+                SearchState::Loaded(ScopedResults::Tracks(tracks)) => {
+                    tracks.get(self.selected_index).cloned()
+                }
+                _ => None,
+            },
+        }
+    }
+
+    /// `Enter`/`a` on an artist/album row: fetch its tracks, then either
+    /// play (`play=true`) or enqueue (`play=false`) when they arrive.
+    fn expand_selected_detail(&mut self, play: bool) {
+        let req = match &self.search_state {
+            SearchState::Loaded(ScopedResults::Artists(artists)) => {
+                artists.get(self.selected_index).and_then(|a| {
+                    if a.id.is_empty() {
+                        None
+                    } else {
+                        Some(DetailRequest::Artist {
+                            id: a.id.clone(),
+                            name: a.name.clone(),
+                        })
+                    }
+                })
+            }
+            SearchState::Loaded(ScopedResults::Albums(albums)) => {
+                albums.get(self.selected_index).and_then(|a| {
+                    if a.id.is_empty() {
+                        None
+                    } else {
+                        Some(DetailRequest::Album {
+                            id: a.id.clone(),
+                            title: a.title.clone(),
+                        })
+                    }
+                })
+            }
+            _ => None,
+        };
+        if let Some(req) = req {
+            let label = match &req {
+                DetailRequest::Artist { name, .. } => format!("artist {}", name),
+                DetailRequest::Album { title, .. } => format!("album {}", title),
+            };
+            self.search_state = SearchState::LoadingDetail(label);
+            self.pending_detail_play = play;
+            let (tx, rx) = std::sync::mpsc::channel();
+            search::spawn_detail(req, tx);
+            self.detail_rx = Some(rx);
+        }
+    }
+
     pub fn dispatch(&mut self, action: Action) {
         match action {
             Action::EnqueueSelected => match self.screen {
@@ -20,32 +102,30 @@ impl App {
                         self.queue.insert(self.queue_index + 1, track.clone());
                     }
                 }
-                _ => {
-                    if let SearchState::Loaded(tracks) = &self.search_state
-                        && let Some(track) = tracks.get(self.selected_index)
-                        && !self.queue.iter().any(|t| t.id == track.id)
-                    {
-                        self.queue.insert(self.queue_index + 1, track.clone());
+                _ => match &self.search_state {
+                    SearchState::Loaded(ScopedResults::Tracks(tracks)) => {
+                        if let Some(track) = tracks.get(self.selected_index)
+                            && !self.queue.iter().any(|t| t.id == track.id)
+                        {
+                            self.queue.insert(self.queue_index + 1, track.clone());
+                        }
                     }
-                }
+                    SearchState::Loaded(
+                        ScopedResults::Artists(_) | ScopedResults::Albums(_),
+                    ) => {
+                        self.expand_selected_detail(false);
+                    }
+                    _ => {}
+                },
             },
             Action::Search => {
                 if self.screen == Screen::Search {
                     self.input_mode = Some(InputMode::Search);
-                    self.cursor = self.input_text.len();
+                    self.clamp_cursor();
                 }
             }
             Action::SearchSubmit => {
-                let query = self.input_text.trim().to_string();
-                if query.is_empty() {
-                    return;
-                }
-                self.input_mode = None;
-                self.selected_index = 0;
-                self.search_state = SearchState::Searching;
-                let (tx, rx) = std::sync::mpsc::channel();
-                search::spawn_search(query, tx);
-                self.search_rx = Some(rx);
+                self.submit_search();
             }
             Action::ShowPlaylists => {
                 self.screen = Screen::PlaylistBrowser;
@@ -54,6 +134,7 @@ impl App {
             Action::NewPlaylist => {
                 self.input_mode = Some(InputMode::NewPlaylist);
                 self.input_text.clear();
+                self.cursor = 0;
             }
             Action::DeletePlaylist => {
                 if self.playlist_selected < self.playlists.playlists.len() {
@@ -115,16 +196,22 @@ impl App {
                         }
                     }
                 }
-                _ => {
-                    if let SearchState::Loaded(tracks) = &self.search_state {
-                        if let Some(track) = tracks.get(self.selected_index) {
+                _ => match &self.search_state {
+                    SearchState::Loaded(ScopedResults::Tracks(tracks)) => {
+                        if let Some(track) = tracks.get(self.selected_index).cloned() {
                             self.queue.clear();
                             self.queue_index = 0;
                             self.queue_selected = 0;
-                            self.play_track(track.clone());
+                            self.play_track(track);
                         }
                     }
-                }
+                    SearchState::Loaded(
+                        ScopedResults::Artists(_) | ScopedResults::Albums(_),
+                    ) => {
+                        self.expand_selected_detail(true);
+                    }
+                    _ => {}
+                },
             },
 
             Action::PauseResume => match self.playback_state {
@@ -179,7 +266,7 @@ impl App {
                     } else {
                         self.playlists.add_track("liked", track.clone());
                     }
-                } else if let SearchState::Loaded(tracks) = &self.search_state {
+                } else if let SearchState::Loaded(ScopedResults::Tracks(tracks)) = &self.search_state {
                     if let Some(track) = tracks.get(self.selected_index) {
                         if self.playlists.is_liked(&track.id) {
                             self.playlists.remove_track("liked", &track.id);
@@ -236,20 +323,58 @@ impl App {
             },
 
             Action::TypeChar(c) => {
-                self.input_text.insert(self.cursor, c);
-                self.cursor += 1;
+                self.insert_char(c);
             }
             Action::Backspace => {
-                if self.cursor > 0 {
-                    self.cursor -= 1;
-                    self.input_text.remove(self.cursor);
-                }
+                self.backspace();
             }
             Action::CursorLeft => {
-                self.cursor = self.cursor.saturating_sub(1);
+                self.cursor_left();
             }
             Action::CursorRight => {
-                self.cursor = (self.cursor + 1).min(self.input_text.len());
+                self.cursor_right();
+            }
+            Action::CursorStart => {
+                self.cursor = 0;
+            }
+            Action::CursorEnd => {
+                self.cursor = self.input_text.len();
+                self.clamp_cursor();
+            }
+            Action::DeleteChar => {
+                self.clamp_cursor();
+                if self.cursor < self.input_text.len() {
+                    let mut end = self.cursor + 1;
+                    while end < self.input_text.len()
+                        && !self.input_text.is_char_boundary(end)
+                    {
+                        end += 1;
+                    }
+                    self.input_text.drain(self.cursor..end);
+                }
+            }
+            Action::DeleteWord => {
+                self.clamp_cursor();
+                let bytes = self.input_text.as_bytes();
+                let mut start = self.cursor;
+                while start > 0 && bytes[start - 1].is_ascii_whitespace() {
+                    start -= 1;
+                    while start > 0 && !self.input_text.is_char_boundary(start) {
+                        start -= 1;
+                    }
+                }
+                while start > 0 && !bytes[start - 1].is_ascii_whitespace() {
+                    start -= 1;
+                    while start > 0 && !self.input_text.is_char_boundary(start) {
+                        start -= 1;
+                    }
+                }
+                self.input_text.drain(start..self.cursor);
+                self.cursor = start;
+            }
+            Action::ClearInput => {
+                self.input_text.clear();
+                self.cursor = 0;
             }
             Action::ConfirmInput => match self.input_mode {
                 Some(InputMode::AddToPlaylist) => {
@@ -268,6 +393,7 @@ impl App {
                     }
                     self.input_mode = None;
                     self.input_text.clear();
+                    self.cursor = 0;
                 }
                 Some(InputMode::ImportPlaylist) => {
                     let input = self.input_text.trim().to_string();
@@ -284,16 +410,7 @@ impl App {
                     }
                 }
                 Some(InputMode::Search) => {
-                    let query = self.input_text.trim().to_string();
-                    if !query.is_empty() {
-                        self.input_mode = None;
-                        self.cursor = 0;
-                        self.selected_index = 0;
-                        self.search_state = SearchState::Searching;
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        search::spawn_search(query, tx);
-                        self.search_rx = Some(rx);
-                    }
+                    self.submit_search();
                 }
                 None => {}
             },
@@ -346,25 +463,7 @@ impl App {
                 self.queue_selected = self.queue_selected.min(self.queue.len().saturating_sub(1));
             }
             Action::AddToPlaylist => {
-                let track = match self.screen {
-                    Screen::PlaylistDetail => {
-                        if let Some(pl_id) = &self.playlist_detail_id
-                            && let Some(pl) = self.playlists.playlists.iter().find(|p| p.id == *pl_id)
-                        {
-                            pl.tracks.get(self.selected_index).cloned()
-                        } else {
-                            None
-                        }
-                    }
-                    _ => {
-                        if let SearchState::Loaded(tracks) = &self.search_state {
-                            tracks.get(self.selected_index).cloned()
-                        } else {
-                            None
-                        }
-                    }
-                };
-                if let Some(track) = track {
+                if let Some(track) = self.selected_track() {
                     self.pending_add_track = Some(track);
                     self.input_mode = Some(InputMode::AddToPlaylist);
                     self.playlist_selected = 0;
@@ -547,14 +646,66 @@ impl App {
         if let Some(ref rx) = self.search_rx {
             if let Ok(result) = rx.try_recv() {
                 match result {
-                    SearchResult::Ready(tracks) => {
-                        self.search_state = SearchState::Loaded(tracks);
+                    SearchResult::Ready {
+                        results,
+                        scope,
+                        query,
+                    } => {
+                        self.search_scope = scope;
+                        self.search_query = query;
+                        self.selected_index = 0;
+                        self.search_state = SearchState::Loaded(results);
                     }
                     SearchResult::Error(e) => {
                         self.search_state = SearchState::Error(e);
                     }
                 }
                 self.search_rx = None;
+            }
+        }
+    }
+
+    pub fn drain_detail(&mut self) {
+        if let Some(ref rx) = self.detail_rx {
+            if let Ok(result) = rx.try_recv() {
+                let play = self.pending_detail_play;
+                self.pending_detail_play = false;
+                self.detail_rx = None;
+                match result {
+                    Ok(tracks) if !tracks.is_empty() => {
+                        self.selected_index = 0;
+                        if play {
+                            self.queue.clear();
+                            self.queue_index = 0;
+                            self.queue_selected = 0;
+                            self.search_state =
+                                SearchState::Loaded(ScopedResults::Tracks(tracks.clone()));
+                            if let Some(first) = tracks.into_iter().next() {
+                                self.play_track(first);
+                            }
+                        } else {
+                            // Enqueue whole album / artist top songs after current.
+                            let insert_at = (self.queue_index + 1).min(self.queue.len());
+                            let mut added = 0;
+                            for (offset, t) in tracks.iter().enumerate() {
+                                if !self.queue.iter().any(|qt| qt.id == t.id) {
+                                    self.queue.insert(insert_at + added, t.clone());
+                                    added += 1;
+                                }
+                                let _ = offset;
+                            }
+                            self.search_state =
+                                SearchState::Loaded(ScopedResults::Tracks(tracks));
+                        }
+                    }
+                    Ok(_) => {
+                        self.search_state =
+                            SearchState::Error("No playable tracks found.".to_string());
+                    }
+                    Err(e) => {
+                        self.search_state = SearchState::Error(e.to_string());
+                    }
+                }
             }
         }
     }

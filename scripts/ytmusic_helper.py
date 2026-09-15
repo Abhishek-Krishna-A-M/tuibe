@@ -72,14 +72,66 @@ def normalize(item, video_id_key="videoId"):
     }
 
 
+def normalize_artist(item):
+    return {
+        "id": item.get("browseId") or "",
+        "name": item.get("artist") or item.get("title") or "Unknown",
+        "subscribers": item.get("subscribers"),
+        "thumbnail": get_thumbnail_url(item),
+    }
+
+
+def normalize_album(item):
+    return {
+        "id": item.get("browseId") or "",
+        "title": item.get("title") or "Unknown",
+        "artist": get_artist(item),
+        "year": str(item.get("year")) if item.get("year") is not None else None,
+        "thumbnail": get_thumbnail_url(item),
+    }
+
+
 def cmd_search(args):
-    query = " ".join(args) if args else ""
+    # New: `search <filter> <query...>` where filter is
+    # songs|artists|albums. Old callers passed only `<query...>`;
+    # keep that working by defaulting to songs.
+    filt = "songs"
+    query_parts = args
+    if args and args[0] in ("songs", "artists", "albums"):
+        filt = args[0]
+        query_parts = args[1:]
+    query = " ".join(query_parts) if query_parts else ""
     if not query:
         print(json.dumps([]))
         return
 
     yt = get_yt()
 
+    if filt == "artists":
+        results = yt.search(query, filter="artists", limit=25)
+        out = []
+        for r in results:
+            if r.get("resultType", "") != "artist":
+                continue
+            if not (r.get("browseId") or ""):
+                continue
+            out.append(normalize_artist(r))
+        print(json.dumps(out))
+        return
+
+    if filt == "albums":
+        results = yt.search(query, filter="albums", limit=25)
+        out = []
+        for r in results:
+            if r.get("resultType", "") != "album":
+                continue
+            if not (r.get("browseId") or ""):
+                continue
+            out.append(normalize_album(r))
+        print(json.dumps(out))
+        return
+
+    # filt == "songs": original behaviour (songs + videos)
     results = yt.search(query, limit=50)
 
     songs_filtered = yt.search(query, filter="songs", limit=50)
@@ -102,6 +154,47 @@ def cmd_search(args):
             track["duration"] = dur_map[vid]
         tracks.append(track)
 
+    print(json.dumps(tracks))
+
+
+def cmd_artist(args):
+    browse_id = args[0] if args else ""
+    if not browse_id:
+        print(json.dumps([]))
+        return
+
+    yt = get_yt()
+    data = yt.get_artist(browse_id)
+
+    songs = (data.get("songs") or {}).get("results") or []
+    tracks = []
+    for r in songs:
+        vid = r.get("videoId") or ""
+        if not vid:
+            continue
+        tracks.append(normalize(r))
+    print(json.dumps(tracks))
+
+
+def cmd_album(args):
+    browse_id = args[0] if args else ""
+    if not browse_id:
+        print(json.dumps([]))
+        return
+
+    yt = get_yt()
+    data = yt.get_album(browse_id)
+
+    tracks = []
+    for r in data.get("tracks") or []:
+        vid = r.get("videoId") or ""
+        if not vid:
+            continue
+        track = normalize(r)
+        # Albums often omit the artist per-track; fall back to album artist.
+        if track["artist"] in ("", "Unknown"):
+            track["artist"] = get_artist(data)
+        tracks.append(track)
     print(json.dumps(tracks))
 
 
@@ -167,6 +260,10 @@ def main():
 
     if cmd == "search":
         cmd_search(args)
+    elif cmd == "artist":
+        cmd_artist(args)
+    elif cmd == "album":
+        cmd_album(args)
     elif cmd == "related":
         cmd_related(args)
     elif cmd == "playlist":

@@ -123,6 +123,7 @@ fn run_app(
 
         app.drain_player_events();
         app.drain_search_results();
+        app.drain_detail();
         app.drain_related();
         app.drain_import();
         app.drain_sync();

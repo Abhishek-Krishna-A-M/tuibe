@@ -28,6 +28,11 @@ pub enum Action {
     MoveDown,
     CursorLeft,
     CursorRight,
+    CursorStart,
+    CursorEnd,
+    DeleteChar,
+    DeleteWord,
+    ClearInput,
     TypeChar(char),
     Backspace,
     ConfirmInput,
@@ -58,6 +63,18 @@ pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
 
     // Input mode: route all chars to the active input
     if let Some(mode) = app.input_mode() {
+        // Emacs-style editing works in every text field.
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('u') => return Some(Action::ClearInput),
+                KeyCode::Char('w') => return Some(Action::DeleteWord),
+                KeyCode::Char('a') => return Some(Action::CursorStart),
+                KeyCode::Char('e') => return Some(Action::CursorEnd),
+                KeyCode::Char('b') => return Some(Action::CursorLeft),
+                KeyCode::Char('f') => return Some(Action::CursorRight),
+                _ => {}
+            }
+        }
         match mode {
             InputMode::AddToPlaylist => match key.code {
                 KeyCode::Esc => return Some(Action::Cancel),
@@ -70,8 +87,11 @@ pub fn map_key(key: KeyEvent, app: &App) -> Option<Action> {
                 KeyCode::Esc => return Some(Action::Cancel),
                 KeyCode::Enter => return Some(Action::ConfirmInput),
                 KeyCode::Backspace => return Some(Action::Backspace),
+                KeyCode::Delete => return Some(Action::DeleteChar),
                 KeyCode::Left => return Some(Action::CursorLeft),
                 KeyCode::Right => return Some(Action::CursorRight),
+                KeyCode::Home => return Some(Action::CursorStart),
+                KeyCode::End => return Some(Action::CursorEnd),
                 KeyCode::Char(c) => return Some(Action::TypeChar(c)),
                 _ => return None,
             },

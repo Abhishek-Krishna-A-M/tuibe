@@ -22,7 +22,7 @@ pub fn render_status_bar(frame: &mut ratatui::Frame, app: &App, area: Rect) {
     let autoplay_icon = if app.autoplay { " " } else { "" };
 
     let hint = match app.screen {
-        Screen::Search => " / search  ↑↓ nav  ↵ play  ␣ pause  ♥ like  A add_pl",
+        Screen::Search => " / search (artist:/album:/movie:)  ↑↓ nav  ↵ play  a queue  ␣ pause  ♥ like  A add_pl",
         Screen::Queue => " Tab back  ↑↓ nav  d remove",
         Screen::PlaylistBrowser => " ↵ open  n new  I import  S sync  d delete  Esc back",
         Screen::PlaylistDetail => " ↵ play  d remove  Esc back",

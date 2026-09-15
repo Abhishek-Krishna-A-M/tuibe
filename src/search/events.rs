@@ -27,7 +27,54 @@ impl Track {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
+pub struct Artist {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub subscribers: Option<String>,
+    #[serde(default)]
+    pub thumbnail: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Default)]
+pub struct Album {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub year: Option<String>,
+    #[serde(default)]
+    pub thumbnail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScopedResults {
+    Tracks(Vec<Track>),
+    Artists(Vec<Artist>),
+    Albums(Vec<Album>),
+}
+
+impl ScopedResults {
+    pub fn len(&self) -> usize {
+        match self {
+            ScopedResults::Tracks(t) => t.len(),
+            ScopedResults::Artists(a) => a.len(),
+            ScopedResults::Albums(a) => a.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 pub enum SearchResult {
-    Ready(Vec<Track>),
+    Ready {
+        results: ScopedResults,
+        scope: super::query::SearchScope,
+        query: String,
+    },
     Error(String),
 }

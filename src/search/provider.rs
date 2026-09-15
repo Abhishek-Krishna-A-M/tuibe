@@ -1,7 +1,8 @@
 use anyhow::Result;
 
-use super::events::Track;
+use super::events::ScopedResults;
+use super::query::SearchScope;
 
 pub trait SearchProvider: Send {
-    fn search(&self, query: &str) -> Result<Vec<Track>>;
+    fn search(&self, query: &str, scope: SearchScope) -> Result<ScopedResults>;
 }
